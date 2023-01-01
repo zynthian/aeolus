@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------
 //
-//  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//  Copyright (C) 2003-2019 Fons Adriaensen <fons@linuxaudio.org>
 //    
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,14 +28,7 @@
 #include <clthreads.h>
 #include <dlfcn.h>
 #include "audio.h"
-#include "audio_jack.h"
-#if __linux__
-# include "audio_alsa.h"
-# include "imidi_alsa.h"
-#elif __APPLE__
-# include "audio_coreaudio.h"
-# include "imidi_coremidi.h"
-#endif
+#include "imidi.h"
 #include "model.h"
 #include "slave.h"
 #include "osc.h"
@@ -44,8 +37,6 @@
 
 #ifdef __linux__
 static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:o:";
-#elif __APPLE__
-static const char *options = "htuCJBM:N:S:I:W:s:r:p:o:";
 #else
 static const char *options = "htuJBM:N:S:I:W:s:o:";
 #endif
@@ -54,21 +45,16 @@ static bool  t_opt = false;
 static bool  u_opt = false;
 static bool  A_opt = false;
 static bool  B_opt = false;
-static bool  C_opt = false;
-#ifdef __linux__
 static int   r_val = 48000;
-#elif __APPLE__
-static int   r_val = 44100;
-#endif
 static int   p_val = 1024;
 static int   n_val = 2;
+static int   o_val = 0;
 static const char *N_val = "aeolus";
 static const char *S_val = "stops";
 static const char *I_val = "Aeolus";
 static const char *W_val = "waves";
 static const char *d_val = "default";
 static const char *s_val = 0;
-static int  o_val = 0;
 static Lfq_u32  note_queue (256);
 static Lfq_u32  comm_queue (256);
 static Lfq_u8   midi_queue (1024);
@@ -78,35 +64,24 @@ static Iface   *iface;
 static void help (void)
 {
     fprintf (stderr, "\nAeolus %s\n\n",VERSION);
-    fprintf (stderr, "  (C) 2003-2013 Fons Adriaensen  <fons@linuxaudio.org>\n");
+    fprintf (stderr, "  (C) 2003-2022 Fons Adriaensen  <fons@linuxaudio.org>\n");
     fprintf (stderr, "Options:\n");
     fprintf (stderr, "  -h                 Display this text\n");
     fprintf (stderr, "  -t                 Text mode user interface\n");
     fprintf (stderr, "  -u                 Use presets file in user's home dir\n");
     fprintf (stderr, "  -o <port>          Enable OSC interface on UDP port\n");
-#ifdef __linux__
     fprintf (stderr, "  -N <name>          Name to use as JACK and ALSA client [aeolus]\n");   
-#else
-    fprintf (stderr, "  -N <name>          Name to use as JACK and CoreMIDI client [aeolus]\n");   
-#endif
     fprintf (stderr, "  -S <stops>         Name of stops directory [stops]\n");   
     fprintf (stderr, "  -I <instr>         Name of instrument directory [Aeolus]\n");   
     fprintf (stderr, "  -W <waves>         Name of waves directory [waves]\n");   
     fprintf (stderr, "  -J                 Use JACK (default), with options:\n");
     fprintf (stderr, "    -s               Select JACK server\n");
     fprintf (stderr, "    -B               Ambisonics B format output\n");
-#ifdef __linux__
     fprintf (stderr, "  -A                 Use ALSA, with options:\n");
     fprintf (stderr, "    -d <device>        Alsa device [default]\n");
     fprintf (stderr, "    -r <rate>          Sample frequency [48000]\n");
     fprintf (stderr, "    -p <period>        Period size [1024]\n");
     fprintf (stderr, "    -n <nfrags>        Number of fragments [2]\n\n");
-#endif
-#if __APPLE__
-    fprintf (stderr, "  -C                 Use CoreAudio rather than Jack\n");
-    fprintf (stderr, "    -r <rate>          Sample frequency [44100]\n");
-    fprintf (stderr, "    -p <period>        Period size [1024]\n");
-#endif
     exit (1);
 }
 
@@ -134,7 +109,6 @@ static void procoptions (int ac, char *av [], const char *where)
  	case 'A' : A_opt = true;  break;
 	case 'J' : A_opt = false; break;
 	case 'B' : B_opt = true; break;
-        case 'C' : C_opt = true; break;
         case 'r' : r_val = atoi (optarg); break;
         case 'p' : p_val = atoi (optarg); break;
         case 'n' : n_val = atoi (optarg); break;
@@ -143,7 +117,7 @@ static void procoptions (int ac, char *av [], const char *where)
         case 'I' : I_val = optarg; break; 
         case 'W' : W_val = optarg; break; 
         case 'd' : d_val = optarg; break; 
-        case 'o' : o_val = atoi (optarg); break;
+        case 'o' : o_val = atoi (optarg); break; 
 	case 's' : s_val = optarg; break;
         case '?':
             fprintf (stderr, "\n%s\n", where);
@@ -235,22 +209,15 @@ int main (int ac, char *av [])
         return 1;
     }
 
-    audio = NULL;
+    audio = new Audio (N_val, &note_queue, &comm_queue);
 #ifdef __linux__
-    if (A_opt)
-        audio = new Audio_alsa(N_val, &note_queue, &comm_queue, d_val, r_val, p_val, n_val);
-#elif __APPLE__
-    if (C_opt)
-        audio = new Audio_coreaudio (N_val, &note_queue, &comm_queue, r_val, p_val);
+    if (A_opt) audio->init_alsa (d_val, r_val, p_val, n_val);
+    else       audio->init_jack (s_val, B_opt, &midi_queue);
+#else
+    audio->init_jack (s_val, B_opt, &midi_queue);
 #endif
-    if (!audio)
-        audio = new Audio_jack (N_val, &note_queue, &comm_queue, s_val, B_opt, &midi_queue);
     model = new Model (&comm_queue, &midi_queue, audio->midimap (), audio->appname (), S_val, I_val, W_val, u_opt);
-#if __linux__
-    imidi = new Imidi_alsa (&note_queue, &midi_queue, audio->midimap (), audio->appname ());
-#elif __APPLE__
-    imidi = new Imidi_coremidi (&note_queue, &midi_queue, audio->midimap (), audio->appname ());
-#endif
+    imidi = new Imidi (&note_queue, &midi_queue, audio->midimap (), audio->appname ());
     slave = new Slave ();
     if (o_val)
         osc = new Osc(o_val);
@@ -269,12 +236,13 @@ int main (int ac, char *av [])
     ITC_ctrl::connect (slave, EV_EXIT,  &itcc, EV_EXIT);    
     ITC_ctrl::connect (slave, TO_AUDIO, audio, FM_SLAVE);    
     ITC_ctrl::connect (slave, TO_MODEL, model, FM_SLAVE);    
+    if (osc)
+    {
+        ITC_ctrl::connect (osc, TO_MODEL, model, FM_OSC);    
+        ITC_ctrl::connect (osc, EV_EXIT, &itcc, EV_EXIT);    
+    }
     ITC_ctrl::connect (iface, EV_EXIT,  &itcc, EV_EXIT);    
     ITC_ctrl::connect (iface, TO_MODEL, model, FM_IFACE);    
-    if (osc) {
-        ITC_ctrl::connect (osc, TO_MODEL, model, FM_OSC);
-        ITC_ctrl::connect (osc, EV_EXIT, &itcc, EV_EXIT);
-    }
 
     audio->start ();
     if (imidi->thr_start (SCHED_FIFO, audio->relpri () - 20, 0))
@@ -304,7 +272,7 @@ int main (int ac, char *av [])
 		model->terminate ();
 		slave->terminate ();
         if (osc)
-            osc->terminate ();
+		    osc->terminate ();
 		iface->terminate ();
 	    }
 	}

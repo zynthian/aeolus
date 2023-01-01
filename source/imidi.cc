@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------
 //
-//  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
 //    
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -20,14 +20,14 @@
 
 #include "imidi.h"
 
+
+
 Imidi::Imidi (Lfq_u32 *qnote, Lfq_u8 *qmidi, uint16_t *midimap, const char *appname) :
     A_thread ("Imidi"),
-    _appname (appname),
-    _qnote(qnote),
-    _qmidi(qmidi),
+    _qnote (qnote),
+    _qmidi (qmidi),
     _midimap (midimap),
-    _client(0),
-    _ipport(0)
+    _appname (appname)
 {
 }
 
@@ -36,11 +36,67 @@ Imidi::~Imidi (void)
 {
 }
 
+
+void Imidi::terminate (void)
+{
+    snd_seq_event_t E;
+
+    if (_handle)
+    {   
+	snd_seq_ev_clear (&E);
+	snd_seq_ev_set_direct (&E);
+	E.type = SND_SEQ_EVENT_USR0;
+	E.source.port = _opport;
+	E.dest.client = _client;
+	E.dest.port   = _ipport;
+	snd_seq_event_output_direct (_handle, &E);
+    }
+}
+
+
+void Imidi::thr_main (void)
+{
+    open_midi ();
+    proc_midi ();
+    close_midi ();
+    send_event (EV_EXIT, 1);
+}
+
+
 void Imidi::open_midi (void)
 {
-    on_open_midi();
+    snd_seq_client_info_t *C;
+    M_midi_info *M;
 
-    M_midi_info *M = new M_midi_info ();
+    if (snd_seq_open (&_handle, "hw", SND_SEQ_OPEN_DUPLEX, 0) < 0)
+    {
+        fprintf(stderr, "Error opening ALSA sequencer.\n");
+        exit(1);
+    }
+
+    snd_seq_client_info_alloca (&C);
+    snd_seq_get_client_info (_handle, C);
+    _client = snd_seq_client_info_get_client (C);
+    snd_seq_client_info_set_name (C, _appname);
+    snd_seq_set_client_info (_handle, C);
+
+    if ((_ipport = snd_seq_create_simple_port (_handle, "In",
+        SND_SEQ_PORT_CAP_WRITE | SND_SEQ_PORT_CAP_SUBS_WRITE,
+        SND_SEQ_PORT_TYPE_APPLICATION)) < 0)
+    {
+        fprintf(stderr, "Error creating sequencer input port.\n");
+        exit(1);
+    }
+
+    if ((_opport = snd_seq_create_simple_port (_handle, "Out",
+         SND_SEQ_PORT_CAP_WRITE,
+         SND_SEQ_PORT_TYPE_APPLICATION)) < 0)
+    {
+        fprintf(stderr, "Error creating sequencer output port.\n");
+        exit(1);
+    }
+
+    M = new M_midi_info ();
     M->_client = _client;
     M->_ipport = _ipport;
     memcpy (M->_chbits, _midimap, 16 * sizeof (uint16_t));
@@ -50,30 +106,34 @@ void Imidi::open_midi (void)
 
 void Imidi::close_midi (void)
 {
-    on_close_midi();
+    if (_handle) snd_seq_close (_handle);
 }
 
-void Imidi::terminate()
+
+void Imidi::proc_midi (void) 
 {
-    on_terminate();
-}
+    snd_seq_event_t  *E;
+    int              c, f, k, n, p, t, v;
 
-void Imidi::proc_midi_event(const MidiEvent &ev)
-{
-    int              c, f, m, t, n, v, p;
+    // Read and process MIDI commands from the ALSA port.
+    // Events related to keyboard state are sent to the 
+    // audio thread via the qnote queue. All the rest is
+    // sent as raw MIDI to the model thread via qmidi.
 
-    c = ev.note.channel;
-    m = _midimap [c] & 127;        // Keyboard and hold bits
-//        d = (_midimap [c] >>  8) & 7;  // Division number if (f & 2)
-    f = (_midimap [c] >> 12) & 7;  // Control enabled if (f & 4)
-    t = ev.type;
+    while (true)
+    {
+	snd_seq_event_input(_handle, &E);
+        c = E->data.note.channel;               
+        k = _midimap [c] & 15;
+        f = _midimap [c] >> 12;
+        t = E->type;
 
-    switch (t)
+	switch (t)
 	{ 
 	case SND_SEQ_EVENT_NOTEON:
 	case SND_SEQ_EVENT_NOTEOFF:
-	    n = ev.note.note;
-	    v = ev.note.velocity;
+	    n = E->data.note.note;
+	    v = E->data.note.velocity;
             if ((t == SND_SEQ_EVENT_NOTEON) && v)
 	    {
                 // Note on.
@@ -94,11 +154,11 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
 	        }
                 else if (n <= 96)
 	        {
-                    if (m)
+                    if (f & 1)
 		    {
 	                if (_qnote->write_avail () > 0)
 	                {
-	                    _qnote->write (0, (1 << 24) | ((n - 36) << 8) | m);
+	                    _qnote->write (0, (1 << 24) | ((n - 36) << 16) | k);
                             _qnote->write_commit (1);
 	                } 
 		    }
@@ -112,11 +172,11 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
 	        }
                 else if (n <= 96)
 	        {
-                    if (m)
+                    if (f & 1)
 		    {
 	                if (_qnote->write_avail () > 0)
 	                {
-	                    _qnote->write (0, ((n - 36) << 8) | m);
+	                    _qnote->write (0, (0 << 24) | ((n - 36) << 16) | k);
                             _qnote->write_commit (1);
 	                } 
 		    }
@@ -125,20 +185,20 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
 	    break;
 
 	case SND_SEQ_EVENT_CONTROLLER:
-	    p = ev.control.param;
-	    v = ev.control.value;
+	    p = E->data.control.param;
+	    v = E->data.control.value;
 	    switch (p)
 	    {
 	    case MIDICTL_HOLD:
 		// Hold pedal.
-		if (m & HOLD_MASK)
-		{
-		    v = (v > 63) ? 9 : 8;
-	            if (_qnote->write_avail () > 0)
-	            {
-	                _qnote->write (0, (v << 24) | (m << 16));
+                if (f & 1)
+                {
+                    c = (v > 63) ? 9 : 8;
+                    if (_qnote->write_avail () > 0)
+                    {
+                        _qnote->write (0, (c << 24) | k);
                         _qnote->write_commit (1);
-	            } 
+                    }
 		}
 		break;
 
@@ -149,7 +209,7 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
 		{
 	            if (_qnote->write_avail () > 0)
 	            {
-	                _qnote->write (0, (2 << 24) | ( ALL_MASK << 16) | ALL_MASK);
+	                _qnote->write (0, (2 << 24) | NKEYBD);
                         _qnote->write_commit (1);
 	            } 
 		}
@@ -158,11 +218,11 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
             case MIDICTL_ANOFF:
 		// All notes off, accepted on channels controlling
 		// a keyboard. Does not clear held notes. 
-		if (m)
+		if (f & 1)
 		{
 	            if (_qnote->write_avail () > 0)
 	            {
-	                _qnote->write (0, (2 << 24) | (m << 16) | m);
+	                _qnote->write (0, (2 << 24) | k);
                         _qnote->write_commit (1);
 	            } 
 		}
@@ -209,13 +269,17 @@ void Imidi::proc_midi_event(const MidiEvent &ev)
    	        if (_qmidi->write_avail () >= 3)
 	        {
 		    _qmidi->write (0, 0xC0);
-		    _qmidi->write (1, ev.control.value);
+		    _qmidi->write (1, E->data.control.value);
 		    _qmidi->write (2, 0);
 		    _qmidi->write_commit (3);
 		}
             }
 	    break;
 
+	case SND_SEQ_EVENT_USR0:
+	    // User event, terminates this trhead if we sent it.
+	    if (E->source.client == _client) return;
+	}
     }
 }
 

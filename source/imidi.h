@@ -25,19 +25,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <clthreads.h>
+#ifdef __linux__
+#include <alsa/asoundlib.h>
+#endif
+#ifdef __APPLE__
+#include <CoreMIDI/MIDIServices.h>
+#endif
 #include "lfqueue.h"
 #include "messages.h"
-#if __linux__
-# include <alsa/asoundlib.h>
-#else
-enum {
-    SND_SEQ_EVENT_NOTEON = 1,
-    SND_SEQ_EVENT_NOTEOFF,
-    SND_SEQ_EVENT_CONTROLLER,
-    SND_SEQ_EVENT_PGMCHANGE,
-    SND_SEQ_EVENT_NONE
-};
-#endif
+
+
 
 class Imidi : public A_thread
 {
@@ -47,33 +44,32 @@ public:
     virtual ~Imidi (void);
 
     void terminate (void);
-    
-protected:
-    struct MidiEvent
-    {
-        int type;
-        union {
-            struct { int channel, note, velocity; } note;
-            struct { int channel, param, value; } control;
-        };
-    };
-    void proc_midi_event(const MidiEvent&);
+#ifdef __APPLE__
+    void coremidi_proc (const MIDIPacketList *pktlist, void *refCon, void *connRefCon);
+#endif
+
+private:
+
+    virtual void thr_main (void);
 
     void open_midi (void);
     void close_midi (void);
-    virtual void on_open_midi() = 0;
-    virtual void on_close_midi() = 0;
-    virtual void on_terminate() = 0;
+    void proc_midi (void);
+    void proc_mesg (ITC_mesg *M);
 
-protected:
-    const char     *_appname;
-    int             _client;
-    int             _ipport;
-
-private:
-    Lfq_u32        *_qnote;
+    Lfq_u32        *_qnote; 
     Lfq_u8         *_qmidi; 
     uint16_t       *_midimap;
+    const char     *_appname;
+#ifdef __linux__
+    snd_seq_t      *_handle;
+#endif
+#ifdef __APPLE__
+    MIDIClientRef   _handle;
+#endif
+    int             _client;
+    int             _ipport;
+    int             _opport;
 };
 
 

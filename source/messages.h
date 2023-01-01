@@ -1,6 +1,6 @@
 // ----------------------------------------------------------------------------
 //
-//  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
 //    
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@
 #ifndef __MESSAGES_H
 #define __MESSAGES_H
 
-#include <clthreads.h>
 #include <string.h>
 #include "rankwave.h"
 #include "asection.h"
@@ -31,13 +30,13 @@
 
 enum
 {
-    FM_OSC  = 7,
     FM_SLAVE =  8,
     FM_IFACE =  9,
     FM_MODEL = 10,
     FM_IMIDI = 11,
     FM_AUDIO = 12,
     FM_TXTIP = 13,
+    FM_OSC = 14,
     TO_SLAVE =  8,
     TO_IFACE =  9,
     TO_MODEL = 10,
@@ -126,7 +125,7 @@ public:
     M_new_divis (void) : ITC_mesg (MT_NEW_DIVIS) {}
 
     int             _flags;
-    int             _dmask;
+    int             _keybd;
     int             _asect;
     float           _swell;
     float           _tfreq;
@@ -147,8 +146,8 @@ public:
     float           _fsamp;
     float           _fbase;
     float          *_scale;
-    Addsynth       *_sdef;
-    Rankwave       *_wave;
+    Addsynth       *_synth;
+    Rankwave       *_rwave;
     const char     *_path;
 };
 
@@ -159,9 +158,9 @@ public:
 
     M_ifc_init (void) : ITC_mesg (MT_IFC_INIT) {}
 
-    const char         *_stops;
-    const char         *_waves;
-    const char         *_instr;
+    const char         *_stopsdir;
+    const char         *_wavesdir;
+    const char         *_instrdir;
     const char         *_appid; 
     int                 _client;
     int                 _ipport;
@@ -173,7 +172,7 @@ public:
     struct 
     {
 	const char     *_label;
-        int             _flags;               
+        bool            _pedal;               
     }                   _keybdd [NKEYBD];     
     struct 
     {
@@ -265,20 +264,6 @@ public:
 
     float  _freq;
     int    _temp;
-};
-
-
-class M_ifc_anoff : public ITC_mesg
-{
-public:
-
-    M_ifc_anoff (int bits) :
-        ITC_mesg (MT_IFC_ANOFF),
-        _bits (bits)
-    {
-    }
-
-    int  _bits;    
 };
 
 
