@@ -30,7 +30,7 @@
 #include "global.h"
 
 #ifndef MULTISTOP
-# define MULTISTOP 0
+# define MULTISTOP 1
 #endif
 
 class Asect

@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mlittle-endian -munaligned-access -mvectorize-with-neon-quad -ftree-vectorize -shared  -o aeolus_txt.so CMakeFiles/aeolus_txt.dir/tiface.cc.o  -Wl,-rpath,/usr/local/lib: /usr/local/lib/libclthreads.so -lreadline 

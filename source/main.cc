@@ -204,7 +204,7 @@ int main (int ac, char *av [])
     Imidi         *imidi;
     Model         *model;
     Slave         *slave;
-    Osc           *osc;
+    Osc           *osc = NULL;
     void          *so_handle;
     iface_cr      *so_create;
     char           s [1024];
@@ -271,7 +271,7 @@ int main (int ac, char *av [])
     ITC_ctrl::connect (slave, TO_MODEL, model, FM_SLAVE);    
     ITC_ctrl::connect (iface, EV_EXIT,  &itcc, EV_EXIT);    
     ITC_ctrl::connect (iface, TO_MODEL, model, FM_IFACE);    
-    if (o_val) {
+    if (osc) {
         ITC_ctrl::connect (osc, TO_MODEL, model, FM_OSC);
         ITC_ctrl::connect (osc, EV_EXIT, &itcc, EV_EXIT);
     }
@@ -288,7 +288,7 @@ int main (int ac, char *av [])
 	model->thr_start (SCHED_OTHER, 0, 0);
     }
     slave->thr_start (SCHED_OTHER, 0, 0);
-    if (o_val)
+    if (osc)
         osc->thr_start (SCHED_OTHER, 0, 0);
     iface->thr_start (SCHED_OTHER, 0, 0);
 
@@ -303,7 +303,8 @@ int main (int ac, char *av [])
                 imidi->terminate ();
 		model->terminate ();
 		slave->terminate ();
-        osc->terminate ();
+        if (osc)
+            osc->terminate ();
 		iface->terminate ();
 	    }
 	}
