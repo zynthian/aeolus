@@ -38,15 +38,16 @@
 #endif
 #include "model.h"
 #include "slave.h"
+#include "osc.h"
 #include "iface.h"
 
 
 #ifdef __linux__
-static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:";
+static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:o:";
 #elif __APPLE__
-static const char *options = "htuCJBM:N:S:I:W:s:r:p:";
+static const char *options = "htuCJBM:N:S:I:W:s:r:p:o:";
 #else
-static const char *options = "htuJBM:N:S:I:W:s:";
+static const char *options = "htuJBM:N:S:I:W:s:o:";
 #endif
 static char  optline [1024];
 static bool  t_opt = false;
@@ -67,6 +68,7 @@ static const char *I_val = "Aeolus";
 static const char *W_val = "waves";
 static const char *d_val = "default";
 static const char *s_val = 0;
+static int  o_val = 0;
 static Lfq_u32  note_queue (256);
 static Lfq_u32  comm_queue (256);
 static Lfq_u8   midi_queue (1024);
@@ -81,6 +83,7 @@ static void help (void)
     fprintf (stderr, "  -h                 Display this text\n");
     fprintf (stderr, "  -t                 Text mode user interface\n");
     fprintf (stderr, "  -u                 Use presets file in user's home dir\n");
+    fprintf (stderr, "  -o <port>          Enable OSC interface on UDP port\n");
 #ifdef __linux__
     fprintf (stderr, "  -N <name>          Name to use as JACK and ALSA client [aeolus]\n");   
 #else
@@ -140,6 +143,7 @@ static void procoptions (int ac, char *av [], const char *where)
         case 'I' : I_val = optarg; break; 
         case 'W' : W_val = optarg; break; 
         case 'd' : d_val = optarg; break; 
+        case 'o' : o_val = atoi (optarg); break;
 	case 's' : s_val = optarg; break;
         case '?':
             fprintf (stderr, "\n%s\n", where);
@@ -200,6 +204,7 @@ int main (int ac, char *av [])
     Imidi         *imidi;
     Model         *model;
     Slave         *slave;
+    Osc           *osc;
     void          *so_handle;
     iface_cr      *so_create;
     char           s [1024];
@@ -247,6 +252,8 @@ int main (int ac, char *av [])
     imidi = new Imidi_coremidi (&note_queue, &midi_queue, audio->midimap (), audio->appname ());
 #endif
     slave = new Slave ();
+    if (o_val)
+        osc = new Osc(o_val);
     iface = so_create (ac, av);
 
     ITC_ctrl::connect (audio, EV_EXIT,  &itcc, EV_EXIT);    
@@ -264,6 +271,10 @@ int main (int ac, char *av [])
     ITC_ctrl::connect (slave, TO_MODEL, model, FM_SLAVE);    
     ITC_ctrl::connect (iface, EV_EXIT,  &itcc, EV_EXIT);    
     ITC_ctrl::connect (iface, TO_MODEL, model, FM_IFACE);    
+    if (o_val) {
+        ITC_ctrl::connect (osc, TO_MODEL, model, FM_OSC);
+        ITC_ctrl::connect (osc, EV_EXIT, &itcc, EV_EXIT);
+    }
 
     audio->start ();
     if (imidi->thr_start (SCHED_FIFO, audio->relpri () - 20, 0))
@@ -277,6 +288,8 @@ int main (int ac, char *av [])
 	model->thr_start (SCHED_OTHER, 0, 0);
     }
     slave->thr_start (SCHED_OTHER, 0, 0);
+    if (o_val)
+        osc->thr_start (SCHED_OTHER, 0, 0);
     iface->thr_start (SCHED_OTHER, 0, 0);
 
     signal (SIGINT, sigint_handler); 
@@ -290,6 +303,7 @@ int main (int ac, char *av [])
                 imidi->terminate ();
 		model->terminate ();
 		slave->terminate ();
+        osc->terminate ();
 		iface->terminate ();
 	    }
 	}
@@ -299,6 +313,7 @@ int main (int ac, char *av [])
     delete imidi;
     delete model;
     delete slave;
+    delete osc;
     delete iface;
     dlclose (so_handle);
  

@@ -131,6 +131,7 @@ void Model::thr_main (void)
         case FM_AUDIO:
         case FM_IMIDI:
         case FM_SLAVE:
+        case FM_OSC:
         case FM_IFACE:
             proc_mesg (get_message ());
 	    break;

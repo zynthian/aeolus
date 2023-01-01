@@ -61,6 +61,10 @@ add_library(aeolus_x11 MODULE
     source/multislider.h
     source/styles.cc
     source/styles.h
+    source/tinyosc.c
+    source/tinyosc.h
+    source/osc.h
+    source/osc.cc
 )
 set_property(TARGET aeolus_x11 PROPERTY PREFIX "")
 target_link_libraries(aeolus_x11 
@@ -105,6 +109,10 @@ set(AEOLUS_SRC
     source/scales.h
     source/slave.cc
     source/slave.h
+    source/tinyosc.c
+    source/tinyosc.h
+    source/osc.h
+    source/osc.cc
 )
 if(LINUX)
     list(APPEND AEOLUS_SRC

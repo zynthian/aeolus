@@ -31,6 +31,7 @@
 
 enum
 {
+    FM_OSC  = 7,
     FM_SLAVE =  8,
     FM_IFACE =  9,
     FM_MODEL = 10,
