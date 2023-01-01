@@ -1,3 +1,0 @@
-/usr/local/lib/aeolus_txt.so
-/usr/local/lib/aeolus_x11.so
-/usr/local/bin/aeolus

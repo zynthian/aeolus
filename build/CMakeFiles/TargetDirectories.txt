@@ -1,9 +1,0 @@
-/root/aeolus/build/CMakeFiles/install/strip.dir
-/root/aeolus/build/CMakeFiles/install/local.dir
-/root/aeolus/build/CMakeFiles/install.dir
-/root/aeolus/build/CMakeFiles/aeolus_x11.dir
-/root/aeolus/build/CMakeFiles/aeolus_txt.dir
-/root/aeolus/build/CMakeFiles/edit_cache.dir
-/root/aeolus/build/CMakeFiles/aeolus.dir
-/root/aeolus/build/CMakeFiles/rebuild_cache.dir
-/root/aeolus/build/CMakeFiles/list_install_components.dir
