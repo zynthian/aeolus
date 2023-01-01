@@ -18,6 +18,28 @@
 //
 // ----------------------------------------------------------------------------
 
+/*  Implements OSC control
+    Listens for OSC on UDP port (provided as parameter to class constructor)
+    Supports OSC messages:
+        /quit   - Exit application
+        /exit   - Exit application
+        /save   - Save global configuration
+        /retune - Retune pipes
+            float : Tuning frequence
+            int : Temperament index
+        /store_preset - Store current state as preset
+            int : Bank index
+            int : Preset index
+        /recall_preset - Recalls a preset
+            int : Bank index
+            int : Preset index
+        /inc_preset - Recall next preset in current bank
+        /dec_preset - Recall previous preset in current bank
+        /store_midi_config - Store MIDI configuration
+            int : MIDI config preset (0..7)
+            16 * int : 16-bit word for config of MIDI channel
+*/
+
 
 #ifndef __OSC_H
 #define __OSC_H

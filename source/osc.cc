@@ -2,6 +2,7 @@
 //
 //  Copyright (C) 2003-2023 Fons Adriaensen <fons@linuxaudio.org>
 //                2023 Brian Walton <brian@riban.co.uk>
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
 //  the Free Software Foundation; either version 3 of the License, or
@@ -16,25 +17,6 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 // ----------------------------------------------------------------------------
-
-/*  Implements OSC control
-    Listens for OSC on UDP port (provided as parameter to class constructor)
-    Supports OSC messages:
-        /quit   - Exit application
-        /exit   - Exit application
-        /save   - Save global configuration
-        /retune - Retune pipes
-            float : Tuning frequence
-            int : Temperament index
-        /recall_preset - Recalls a preset
-            int : Bank index
-            int : Preset index
-        /inc_preset - Recall next preset in current bank
-        /dec_preset - Recall previous preset in current bank
-        /store_midi_config - Store MIDI configuration
-            int : MIDI config preset (0..7)
-            16 * int : 16-bit word for config of MIDI channel
-*/
 
 #include "osc.h"
 #include <arpa/inet.h>
@@ -106,6 +88,6 @@ void Osc::process_osc(tosc_message* osc_msg)
             midi_config[i] = tosc_getNextInt32(osc_msg);
         send_event (TO_MODEL, new M_ifc_chconf (MT_IFC_MCSET, preset, midi_config));
     }
-    else
-        tosc_printMessage(osc_msg);
+    //else
+    //    tosc_printMessage(osc_msg);
 }
