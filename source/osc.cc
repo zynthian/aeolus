@@ -20,32 +20,102 @@
 
 #include "osc.h"
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
+
+Osc::Osc (int port, const char* notify_uri) : 
+        A_thread ("OSC"),
+        udp_port(port)
+{
+    if (notify_uri)
+    {
+        char buffer[1024];
+        strcpy(buffer, notify_uri);
+        char *notify_addr = buffer;
+        char *port_str = NULL;
+        for (char *p = buffer; *p != '\0'; ++p)
+        {
+            if (*p == ':')
+            {
+                *p = '\0';
+                port_str = p + 1;
+            }
+            else if (*p == '/')
+            {
+                strcpy(notify_path, p);
+                *p = '\0';
+                break;
+            }
+        }
+        printf("nofify_addr: %s port_str: %s notify_path: %s\n", notify_addr, port_str, notify_path);
+        int port_number = 0;
+        if (port_str)
+            port_number = atoi(port_str);
+
+        memset(notify_sockaddr.sin_zero, '\0', sizeof notify_sockaddr.sin_zero);
+        notify_sockaddr.sin_family = AF_INET;
+        if (port_number)
+            notify_sockaddr.sin_port = htons(port_number);
+        else
+            notify_sockaddr.sin_port = htons(udp_port + 1);
+        notify_sockaddr.sin_addr.s_addr = 0;
+        notify = (inet_pton(AF_INET, notify_addr, &notify_sockaddr.sin_addr) == 1);
+        if (!notify)
+        {
+            // Not dot notation so try name lookup
+            hostent * record = gethostbyname(notify_addr);
+            if (record)
+            {
+                notify_sockaddr.sin_addr = *((in_addr*)record->h_addr_list[0]);
+                notify_sockaddr.sin_family = record->h_addrtype;
+                notify = true;
+            }
+        }
+        if (notify)
+        {
+            char buffer[INET_ADDRSTRLEN];
+            inet_ntop( AF_INET, &notify_sockaddr.sin_addr, buffer, sizeof( buffer ));
+            printf("Sending OSC notifications to %s:%d Path: %s\n", buffer, ntohs(notify_sockaddr.sin_port), notify_path);
+        }
+    }
+}
 
 void Osc::thr_main () 
 {
     char buffer[2048];
-    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    fcntl(fd, F_SETFL, O_NONBLOCK);
+    osc_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    fcntl(osc_fd, F_SETFL, O_NONBLOCK);
     struct sockaddr_in sin;
     sin.sin_family = AF_INET;
     sin.sin_port = htons(udp_port);
     sin.sin_addr.s_addr = INADDR_ANY;
-    bind(fd, (struct sockaddr *) &sin, sizeof(struct sockaddr_in));
+    bind(osc_fd, (struct sockaddr *) &sin, sizeof(struct sockaddr_in));
     printf("Listening for OSC on port %d\n", udp_port);
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 1000;
 
     while (1)
     {
+        int E = get_event_timed ();
+        switch (E)
+        {
+            case FM_MODEL:
+                proc_mesg (get_message ());
+                break;
+        }
+
         fd_set readSet;
         FD_ZERO(&readSet);
-        FD_SET(fd, &readSet);
-        if (select(fd + 1, &readSet, NULL, NULL, NULL) > 0)
+        FD_SET(osc_fd, &readSet);
+        if (select(osc_fd + 1, &readSet, NULL, NULL, &timeout) > 0)
         {
             struct sockaddr sa;
             socklen_t sa_len = sizeof(struct sockaddr_in);
             int len = 0;
-            while ((len = (int) recvfrom(fd, buffer, sizeof(buffer), 0, &sa, &sa_len)) > 0) {
+            while ((len = (int) recvfrom(osc_fd, buffer, sizeof(buffer), 0, &sa, &sa_len)) > 0) {
                 if (tosc_isBundle(buffer)) {
                     tosc_bundle bundle;
                     tosc_parseBundle(&bundle, buffer, len);
@@ -90,4 +160,25 @@ void Osc::process_osc(tosc_message* osc_msg)
     }
     //else
     //    tosc_printMessage(osc_msg);
+}
+
+void Osc::proc_mesg(ITC_mesg *M)
+{
+    if (M)
+        switch (M->type ())
+        {
+            case MT_IFC_RETUNE:
+                printf("OSC retune\n");
+                break;
+            case MT_IFC_READY:
+                printf("OSC ready\n");
+                if (notify)
+                {
+                    char buffer[1024], str[1024];
+                    sprintf(str, "%s/ready", notify_path);
+                    int len = tosc_writeMessage(buffer, sizeof(buffer), str, "");
+                    sendto(osc_fd, buffer, len, MSG_CONFIRM|MSG_DONTWAIT, (const struct sockaddr *) &notify_sockaddr, sizeof(notify_sockaddr));
+                }
+                break;
+        }
 }

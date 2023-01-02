@@ -357,6 +357,7 @@ void Model::proc_mesg (ITC_mesg *M)
     case MT_AUDIO_SYNC:
 	// Wavetable calculation done.
         send_event (TO_IFACE, new ITC_mesg (MT_IFC_READY));
+        send_event (TO_OSC, new ITC_mesg (MT_IFC_READY));
         _ready = true;
 	break;
 

@@ -36,9 +36,9 @@
 
 
 #ifdef __linux__
-static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:o:";
+static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:o:O:";
 #else
-static const char *options = "htuJBM:N:S:I:W:s:o:";
+static const char *options = "htuJBM:N:S:I:W:s:o:O:";
 #endif
 static char  optline [1024];
 static bool  t_opt = false;
@@ -54,6 +54,7 @@ static const char *S_val = "stops";
 static const char *I_val = "Aeolus";
 static const char *W_val = "waves";
 static const char *d_val = "default";
+static const char *O_val = NULL;
 static const char *s_val = 0;
 static Lfq_u32  note_queue (256);
 static Lfq_u32  comm_queue (256);
@@ -70,6 +71,8 @@ static void help (void)
     fprintf (stderr, "  -t                 Text mode user interface\n");
     fprintf (stderr, "  -u                 Use presets file in user's home dir\n");
     fprintf (stderr, "  -o <port>          Enable OSC interface on UDP port\n");
+    fprintf (stderr, "  -O <uri>           URI to send OSC notifications\n");
+    fprintf (stderr, "    uri: ip address:port/path port and path are optional \n");
     fprintf (stderr, "  -N <name>          Name to use as JACK and ALSA client [aeolus]\n");   
     fprintf (stderr, "  -S <stops>         Name of stops directory [stops]\n");   
     fprintf (stderr, "  -I <instr>         Name of instrument directory [Aeolus]\n");   
@@ -118,6 +121,7 @@ static void procoptions (int ac, char *av [], const char *where)
         case 'W' : W_val = optarg; break; 
         case 'd' : d_val = optarg; break; 
         case 'o' : o_val = atoi (optarg); break; 
+        case 'O' : O_val = optarg; break; 
 	case 's' : s_val = optarg; break;
         case '?':
             fprintf (stderr, "\n%s\n", where);
@@ -219,8 +223,8 @@ int main (int ac, char *av [])
     model = new Model (&comm_queue, &midi_queue, audio->midimap (), audio->appname (), S_val, I_val, W_val, u_opt);
     imidi = new Imidi (&note_queue, &midi_queue, audio->midimap (), audio->appname ());
     slave = new Slave ();
-    if (o_val)
-        osc = new Osc(o_val);
+    if (o_val) 
+        osc = new Osc(o_val, O_val);
     iface = so_create (ac, av);
 
     ITC_ctrl::connect (audio, EV_EXIT,  &itcc, EV_EXIT);    
@@ -240,6 +244,7 @@ int main (int ac, char *av [])
     {
         ITC_ctrl::connect (osc, TO_MODEL, model, FM_OSC);    
         ITC_ctrl::connect (osc, EV_EXIT, &itcc, EV_EXIT);    
+        ITC_ctrl::connect (model, TO_OSC, osc, FM_MODEL);    
     }
     ITC_ctrl::connect (iface, EV_EXIT,  &itcc, EV_EXIT);    
     ITC_ctrl::connect (iface, TO_MODEL, model, FM_IFACE);    

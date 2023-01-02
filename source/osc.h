@@ -44,15 +44,18 @@
 #ifndef __OSC_H
 #define __OSC_H
 
+#define MAX_OSC_CLIENTS 5 // Max quantity of clients that may register for tallies
+
 #include <clthreads.h>
 #include "messages.h"
 #include "tinyosc.h"
+#include <arpa/inet.h> // provides inet_pton
 
 class Osc : public A_thread
 {
 public:
 
-    Osc (int port) : A_thread ("OSC"), udp_port(port) {}
+    Osc (int port, const char* notify_uri);
     virtual ~Osc (void) {}
 
     void terminate (void) {  put_event (EV_EXIT, 1); }
@@ -61,8 +64,18 @@ private:
 
     virtual void thr_main (void);
     void process_osc(tosc_message* osc_msg);
+    void sendOscFloat(const char* path, float value);
+    void sendOscInt(const char* path, int value);
+    void proc_mesg(ITC_mesg *M);
     int udp_port;
     uint16_t midi_config[16];
+    int osc_fd;
+    bool notify = false;
+    struct sockaddr_in notify_sockaddr;
+    char notify_path[256] = {'\0'};
+
+    char osc_buffer[1024]; // Used to send OSC messages
+
 };
 
 

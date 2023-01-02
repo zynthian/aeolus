@@ -42,6 +42,7 @@ enum
     TO_MODEL = 10,
     TO_IMIDI = 11,
     TO_AUDIO = 12,
+    TO_OSC = 14,
     EV_RLINE = 0,
     EV_XWIN  = 16,
     EV_QMIDI = 24,
