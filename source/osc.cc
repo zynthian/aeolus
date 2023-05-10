@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 Osc::Osc (int port, const char* notify_uri) : 
         A_thread ("OSC"),
@@ -95,7 +96,6 @@ void Osc::thr_main ()
     printf("Listening for OSC on port %d\n", udp_port);
     struct timeval timeout;
     timeout.tv_sec = 0;
-    timeout.tv_usec = 1000;
 
     while (1)
     {
@@ -110,6 +110,7 @@ void Osc::thr_main ()
         fd_set readSet;
         FD_ZERO(&readSet);
         FD_SET(osc_fd, &readSet);
+        timeout.tv_usec = 10000;
         if (select(osc_fd + 1, &readSet, NULL, NULL, &timeout) > 0)
         {
             struct sockaddr sa;
@@ -130,6 +131,7 @@ void Osc::thr_main ()
                 }
             }
         }
+        //usleep(10000);
     }
 }
 
