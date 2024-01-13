@@ -30,6 +30,8 @@ CXXFLAGS += -march=native
 
 
 all:	aeolus aeolus_x11.so aeolus_txt.so
+debug: CXXFLAGS += -g
+debug: all
 
 
 AEOLUS_O =	main.o audio.o model.o slave.o imidi.o addsynth.o scales.o \

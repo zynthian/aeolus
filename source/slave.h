@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
-//    
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
 //  the Free Software Foundation; either version 3 of the License, or
@@ -17,28 +17,22 @@
 //
 // ----------------------------------------------------------------------------
 
-
 #ifndef __SLAVE_H
 #define __SLAVE_H
-
 
 #include <clthreads.h>
 #include "messages.h"
 
-
 class Slave : public A_thread
 {
 public:
+    Slave(void) : A_thread("Slave") {}
+    virtual ~Slave(void) {}
 
-    Slave (void) : A_thread ("Slave") {}
-    virtual ~Slave (void) {}
-
-    void terminate (void) {  put_event (EV_EXIT, 1); }
+    void terminate(void) { put_event(EV_EXIT, 1); }
 
 private:
-
-    virtual void thr_main (void);
+    virtual void thr_main(void);
 };
-
 
 #endif

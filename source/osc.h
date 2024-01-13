@@ -2,7 +2,7 @@
 //
 //  Copyright (C) 2003-2023 Fons Adriaensen <fons@linuxaudio.org>
 //                2023 Brian Walton <brian@riban.co.uk>
-//    
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
 //  the Free Software Foundation; either version 3 of the License, or
@@ -40,7 +40,6 @@
             16 * int : 16-bit word for config of MIDI channel
 */
 
-
 #ifndef __OSC_H
 #define __OSC_H
 
@@ -54,18 +53,16 @@
 class Osc : public A_thread
 {
 public:
+    Osc(int port, const char *notify_uri);
+    virtual ~Osc(void) {}
 
-    Osc (int port, const char* notify_uri);
-    virtual ~Osc (void) {}
-
-    void terminate (void) {  put_event (EV_EXIT, 1); }
+    void terminate(void) { put_event(EV_EXIT, 1); }
 
 private:
-
-    virtual void thr_main (void);
-    void process_osc(tosc_message* osc_msg);
-    void sendOscFloat(const char* path, float value);
-    void sendOscInt(const char* path, int value);
+    virtual void thr_main(void);
+    void process_osc(tosc_message *osc_msg);
+    void sendOscFloat(const char *path, float value);
+    void sendOscInt(const char *path, int value);
     void proc_mesg(ITC_mesg *M);
     int udp_port;
     uint16_t midi_config[16];
@@ -75,8 +72,6 @@ private:
     char notify_path[256] = {'\0'};
 
     char osc_buffer[1024]; // Used to send OSC messages
-
 };
-
 
 #endif

@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
-//    
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
 //  the Free Software Foundation; either version 3 of the License, or
@@ -17,7 +17,6 @@
 //
 // ----------------------------------------------------------------------------
 
-
 #ifndef __IMIDI_ALSA_H
 #define __IMIDI_ALSA_H
 
@@ -27,19 +26,19 @@
 class Imidi_alsa : public Imidi
 {
 public:
-    Imidi_alsa (Lfq_u32 *qnote, Lfq_u8 *qmidi, uint16_t *midimap, const char *appname);
+    Imidi_alsa(Lfq_u32 *qnote, Lfq_u8 *qmidi, uint16_t *midimap, const char *appname);
 
 protected:
-    virtual void on_open_midi (void);
-    virtual void on_close_midi (void);
-    virtual void on_terminate (void);
+    virtual void on_open_midi(void);
+    virtual void on_close_midi(void);
+    virtual void on_terminate(void);
 
 private:
-    virtual void thr_main (void);
-    void proc_midi (void);
+    virtual void thr_main(void);
+    void proc_midi(void);
 
-    int             _opport;
-    snd_seq_t      *_handle;
+    int _opport;
+    snd_seq_t *_handle;
 };
 
 #endif

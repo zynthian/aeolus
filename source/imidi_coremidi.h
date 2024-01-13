@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
-//    
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
 //  the Free Software Foundation; either version 3 of the License, or
@@ -17,7 +17,6 @@
 //
 // ----------------------------------------------------------------------------
 
-
 #ifndef __IMIDI_COREMIDI_H
 #define __IMIDI_COREMIDI_H
 
@@ -27,19 +26,18 @@
 class Imidi_coremidi : public Imidi
 {
 public:
-
-    Imidi_coremidi (Lfq_u32 *qnote, Lfq_u8 *qmidi, uint16_t *midimap, const char *appname);
+    Imidi_coremidi(Lfq_u32 *qnote, Lfq_u8 *qmidi, uint16_t *midimap, const char *appname);
 
 private:
-    void thr_main (void) override;
+    void thr_main(void) override;
 
-    void on_open_midi (void) override;
-    void on_close_midi (void) override;
+    void on_open_midi(void) override;
+    void on_close_midi(void) override;
     void on_terminate() override;
-    
-    static void coremidi_callback(const MIDIPacketList *, void *, void*);
 
-    MIDIClientRef   _handle;
+    static void coremidi_callback(const MIDIPacketList *, void *, void *);
+
+    MIDIClientRef _handle;
     MIDIEndpointRef _endpoint;
 };
 

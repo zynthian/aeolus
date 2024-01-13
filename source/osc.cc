@@ -26,9 +26,8 @@
 #include <string.h>
 #include <unistd.h>
 
-Osc::Osc (int port, const char* notify_uri) : 
-        A_thread ("OSC"),
-        udp_port(port)
+Osc::Osc(int port, const char *notify_uri) : A_thread("OSC"),
+                                             udp_port(port)
 {
     if (notify_uri)
     {
@@ -66,10 +65,10 @@ Osc::Osc (int port, const char* notify_uri) :
         if (!notify)
         {
             // Not dot notation so try name lookup
-            hostent * record = gethostbyname(notify_addr);
+            hostent *record = gethostbyname(notify_addr);
             if (record)
             {
-                notify_sockaddr.sin_addr = *((in_addr*)record->h_addr_list[0]);
+                notify_sockaddr.sin_addr = *((in_addr *)record->h_addr_list[0]);
                 notify_sockaddr.sin_family = record->h_addrtype;
                 notify = true;
             }
@@ -77,13 +76,13 @@ Osc::Osc (int port, const char* notify_uri) :
         if (notify)
         {
             char buffer[INET_ADDRSTRLEN];
-            inet_ntop( AF_INET, &notify_sockaddr.sin_addr, buffer, sizeof( buffer ));
+            inet_ntop(AF_INET, &notify_sockaddr.sin_addr, buffer, sizeof(buffer));
             printf("Sending OSC notifications to %s:%d Path: %s\n", buffer, ntohs(notify_sockaddr.sin_port), notify_path);
         }
     }
 }
 
-void Osc::thr_main () 
+void Osc::thr_main()
 {
     char buffer[2048];
     osc_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -92,19 +91,19 @@ void Osc::thr_main ()
     sin.sin_family = AF_INET;
     sin.sin_port = htons(udp_port);
     sin.sin_addr.s_addr = INADDR_ANY;
-    bind(osc_fd, (struct sockaddr *) &sin, sizeof(struct sockaddr_in));
+    bind(osc_fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
     printf("Listening for OSC on port %d\n", udp_port);
     struct timeval timeout;
     timeout.tv_sec = 0;
 
     while (1)
     {
-        int E = get_event_timed ();
+        int E = get_event_timed();
         switch (E)
         {
-            case FM_MODEL:
-                proc_mesg (get_message ());
-                break;
+        case FM_MODEL:
+            proc_mesg(get_message());
+            break;
         }
 
         fd_set readSet;
@@ -116,71 +115,76 @@ void Osc::thr_main ()
             struct sockaddr sa;
             socklen_t sa_len = sizeof(struct sockaddr_in);
             int len = 0;
-            while ((len = (int) recvfrom(osc_fd, buffer, sizeof(buffer), 0, &sa, &sa_len)) > 0) {
-                if (tosc_isBundle(buffer)) {
+            while ((len = (int)recvfrom(osc_fd, buffer, sizeof(buffer), 0, &sa, &sa_len)) > 0)
+            {
+                if (tosc_isBundle(buffer))
+                {
                     tosc_bundle bundle;
                     tosc_parseBundle(&bundle, buffer, len);
                     tosc_message osc;
-                    while (tosc_getNextMessage(&bundle, &osc)) {
+                    while (tosc_getNextMessage(&bundle, &osc))
+                    {
                         process_osc(&osc);
                     }
-                } else {
+                }
+                else
+                {
                     tosc_message osc;
                     tosc_parseMessage(&osc, buffer, len);
                     process_osc(&osc);
                 }
             }
         }
-        //usleep(10000);
+        // usleep(10000);
     }
 }
 
-void Osc::process_osc(tosc_message* osc_msg)
+void Osc::process_osc(tosc_message *osc_msg)
 {
     if (strcmp(tosc_getAddress(osc_msg), "/exit") == 0)
-        send_event (EV_EXIT, 1);
+        send_event(EV_EXIT, 1);
     else if (strcmp(tosc_getAddress(osc_msg), "/quit") == 0)
-        send_event (EV_EXIT, 1);
+        send_event(EV_EXIT, 1);
     else if (strcmp(tosc_getAddress(osc_msg), "/save") == 0)
-    	send_event (TO_MODEL, new ITC_mesg (MT_IFC_SAVE));
+        send_event(TO_MODEL, new ITC_mesg(MT_IFC_SAVE));
     else if (strcmp(tosc_getAddress(osc_msg), "/retune") == 0 && strcmp(tosc_getFormat(osc_msg), "fi") == 0)
-        send_event (TO_MODEL, new M_ifc_retune (tosc_getNextFloat(osc_msg), tosc_getNextInt32(osc_msg)));
+        send_event(TO_MODEL, new M_ifc_retune(tosc_getNextFloat(osc_msg), tosc_getNextInt32(osc_msg)));
     else if (strcmp(tosc_getAddress(osc_msg), "/recall_preset") == 0 && strcmp(tosc_getFormat(osc_msg), "ii") == 0)
-        send_event (TO_MODEL, new M_ifc_preset (MT_IFC_PRRCL, tosc_getNextInt32(osc_msg), tosc_getNextInt32(osc_msg), 0, 0));
+        send_event(TO_MODEL, new M_ifc_preset(MT_IFC_PRRCL, tosc_getNextInt32(osc_msg), tosc_getNextInt32(osc_msg), 0, 0));
     else if (strcmp(tosc_getAddress(osc_msg), "/store_preset") == 0 && strcmp(tosc_getFormat(osc_msg), "ii") == 0)
-        send_event (TO_MODEL, new M_ifc_preset (MT_IFC_PRSTO, tosc_getNextInt32(osc_msg), tosc_getNextInt32(osc_msg), 0, 0));
+        send_event(TO_MODEL, new M_ifc_preset(MT_IFC_PRSTO, tosc_getNextInt32(osc_msg), tosc_getNextInt32(osc_msg), 0, 0));
     else if (strcmp(tosc_getAddress(osc_msg), "/inc_preset") == 0)
-        send_event (TO_MODEL, new ITC_mesg (MT_IFC_PRINC));
+        send_event(TO_MODEL, new ITC_mesg(MT_IFC_PRINC));
     else if (strcmp(tosc_getAddress(osc_msg), "/dec_preset") == 0)
-        send_event (TO_MODEL, new ITC_mesg (MT_IFC_PRDEC));
+        send_event(TO_MODEL, new ITC_mesg(MT_IFC_PRDEC));
     else if (strcmp(tosc_getAddress(osc_msg), "/store_midi_config") == 0 && strcmp(tosc_getFormat(osc_msg), "iiiiiiiiiiiiiiiii") == 0)
     {
         int preset = tosc_getNextInt32(osc_msg);
         for (int i = 0; i < 16; ++i)
             midi_config[i] = tosc_getNextInt32(osc_msg);
-        send_event (TO_MODEL, new M_ifc_chconf (MT_IFC_MCSET, preset, midi_config));
+        send_event(TO_MODEL, new M_ifc_chconf(MT_IFC_MCSET, preset, midi_config));
     }
-    //else
-    //    tosc_printMessage(osc_msg);
+    // else
+    //     tosc_printMessage(osc_msg);
 }
 
 void Osc::proc_mesg(ITC_mesg *M)
 {
     if (M)
-        switch (M->type ())
+        switch (M->type())
         {
-            case MT_IFC_RETUNE:
-                printf("OSC retune\n");
-                break;
-            case MT_IFC_READY:
-                printf("OSC ready\n");
-                if (notify)
-                {
-                    char buffer[1024], str[1024];
-                    sprintf(str, "%s/ready", notify_path);
-                    int len = tosc_writeMessage(buffer, sizeof(buffer), str, "");
-                    sendto(osc_fd, buffer, len, MSG_CONFIRM|MSG_DONTWAIT, (const struct sockaddr *) &notify_sockaddr, sizeof(notify_sockaddr));
-                }
-                break;
+        case MT_IFC_RETUNE:
+            printf("OSC retune\n");
+            break;
+        case MT_IFC_READY:
+            printf("OSC ready\n");
+            if (notify)
+            {
+                char buffer[1024], str[1024];
+                sprintf(str, "%s/ready", notify_path);
+                int len = tosc_writeMessage(buffer, sizeof(buffer), str, "");
+                sendto(osc_fd, buffer, len, MSG_CONFIRM | MSG_DONTWAIT, (const struct sockaddr *)&notify_sockaddr, sizeof(notify_sockaddr));
+            }
+            break;
         }
 }
