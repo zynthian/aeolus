@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -39,10 +40,11 @@ public:
     void clr_rank_mask(int ind, int bits);
     void trem_on(void) { _trem = 1; }
     void trem_off(void) { _trem = 2; }
+    void set_reverb(float val);
 
     void process(void);
-    void update(int note, int16_t mask);
-    void update(uint16_t *keys);
+    void update_keys(uint8_t key, uint8_t flags);
+    void update_stops(uint16_t *keys);
 
 private:
     Asection *_asect;

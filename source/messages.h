@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -31,14 +32,12 @@ enum
     FM_SLAVE = 8,
     FM_IFACE = 9,
     FM_MODEL = 10,
-    FM_IMIDI = 11,
     FM_AUDIO = 12,
     FM_TXTIP = 13,
     FM_OSC = 14,
     TO_SLAVE = 8,
     TO_IFACE = 9,
     TO_MODEL = 10,
-    TO_IMIDI = 11,
     TO_AUDIO = 12,
     TO_OSC = 14,
     EV_RLINE = 0,

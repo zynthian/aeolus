@@ -27,31 +27,21 @@
 #include <clthreads.h>
 #include <dlfcn.h>
 #include "audio.h"
-#include "imidi.h"
 #include "model.h"
 #include "slave.h"
 #include "osc.h"
 #include "iface.h"
 
-#ifdef __linux__
-static const char *options = "htuAJBM:N:S:I:W:d:r:p:n:s:o:O:";
-#else
-static const char *options = "htuJBM:N:S:I:W:s:o:O:";
-#endif
+static const char *options = "htuBM:N:S:I:W:s:o:O:";
 static char optline[1024];
 static bool t_opt = false;
 static bool u_opt = false;
-static bool A_opt = false;
 static bool B_opt = false;
-static int r_val = 48000;
-static int p_val = 1024;
-static int n_val = 2;
 static int o_val = 0;
 static const char *N_val = "aeolus";
 static const char *S_val = "stops";
 static const char *I_val = "Aeolus";
 static const char *W_val = "waves";
-static const char *d_val = "default";
 static const char *O_val = NULL;
 static const char *s_val = 0;
 static Lfq_u32 note_queue(256);
@@ -63,6 +53,7 @@ static void help(void)
 {
     fprintf(stderr, "\nAeolus %s\n\n", VERSION);
     fprintf(stderr, "  (C) 2003-2022 Fons Adriaensen  <fons@linuxaudio.org>\n");
+    fprintf(stderr, "      2022-2024 riban  <riban@zynthian.org>\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h                 Display this text\n");
     fprintf(stderr, "  -t                 Text mode user interface\n");
@@ -70,18 +61,12 @@ static void help(void)
     fprintf(stderr, "  -o <port>          Enable OSC interface on UDP port\n");
     fprintf(stderr, "  -O <uri>           URI to send OSC notifications\n");
     fprintf(stderr, "    uri: ip address:port/path port and path are optional \n");
-    fprintf(stderr, "  -N <name>          Name to use as JACK and ALSA client [aeolus]\n");
+    fprintf(stderr, "  -N <name>          Name to use as JACK client [aeolus]\n");
     fprintf(stderr, "  -S <stops>         Name of stops directory [stops]\n");
     fprintf(stderr, "  -I <instr>         Name of instrument directory [Aeolus]\n");
     fprintf(stderr, "  -W <waves>         Name of waves directory [waves]\n");
-    fprintf(stderr, "  -J                 Use JACK (default), with options:\n");
-    fprintf(stderr, "    -s               Select JACK server\n");
-    fprintf(stderr, "    -B               Ambisonics B format output\n");
-    fprintf(stderr, "  -A                 Use ALSA, with options:\n");
-    fprintf(stderr, "    -d <device>        Alsa device [default]\n");
-    fprintf(stderr, "    -r <rate>          Sample frequency [48000]\n");
-    fprintf(stderr, "    -p <period>        Period size [1024]\n");
-    fprintf(stderr, "    -n <nfrags>        Number of fragments [2]\n\n");
+    fprintf(stderr, "  -s                 Select JACK server\n");
+    fprintf(stderr, "  -B                 Ambisonics B format output\n");
     exit(1);
 }
 
@@ -111,23 +96,8 @@ static void procoptions(int ac, char *av[], const char *where)
         case 'u':
             u_opt = true;
             break;
-        case 'A':
-            A_opt = true;
-            break;
-        case 'J':
-            A_opt = false;
-            break;
         case 'B':
             B_opt = true;
-            break;
-        case 'r':
-            r_val = atoi(optarg);
-            break;
-        case 'p':
-            p_val = atoi(optarg);
-            break;
-        case 'n':
-            n_val = atoi(optarg);
             break;
         case 'N':
             N_val = optarg;
@@ -140,9 +110,6 @@ static void procoptions(int ac, char *av[], const char *where)
             break;
         case 'W':
             W_val = optarg;
-            break;
-        case 'd':
-            d_val = optarg;
             break;
         case 'o':
             o_val = atoi(optarg);
@@ -210,7 +177,6 @@ int main(int ac, char *av[])
 {
     ITC_ctrl itcc;
     Audio *audio;
-    Imidi *imidi;
     Model *model;
     Slave *slave;
     Osc *osc = NULL;
@@ -251,16 +217,8 @@ int main(int ac, char *av[])
     }
 
     audio = new Audio(N_val, &note_queue, &comm_queue);
-#ifdef __linux__
-    if (A_opt)
-        audio->init_alsa(d_val, r_val, p_val, n_val);
-    else
-        audio->init_jack(s_val, B_opt, &midi_queue);
-#else
     audio->init_jack(s_val, B_opt, &midi_queue);
-#endif
     model = new Model(&comm_queue, &midi_queue, audio->midimap(), audio->appname(), S_val, I_val, W_val, u_opt);
-    imidi = new Imidi(&note_queue, &midi_queue, audio->midimap(), audio->appname());
     slave = new Slave();
     if (o_val)
         osc = new Osc(o_val, O_val);
@@ -269,9 +227,6 @@ int main(int ac, char *av[])
     ITC_ctrl::connect(audio, EV_EXIT, &itcc, EV_EXIT);
     ITC_ctrl::connect(audio, EV_QMIDI, model, EV_QMIDI);
     ITC_ctrl::connect(audio, TO_MODEL, model, FM_AUDIO);
-    ITC_ctrl::connect(imidi, EV_EXIT, &itcc, EV_EXIT);
-    ITC_ctrl::connect(imidi, EV_QMIDI, model, EV_QMIDI);
-    ITC_ctrl::connect(imidi, TO_MODEL, model, FM_IMIDI);
     ITC_ctrl::connect(model, EV_EXIT, &itcc, EV_EXIT);
     ITC_ctrl::connect(model, TO_AUDIO, audio, FM_MODEL);
     ITC_ctrl::connect(model, TO_SLAVE, slave, FM_MODEL);
@@ -289,11 +244,7 @@ int main(int ac, char *av[])
     ITC_ctrl::connect(iface, TO_MODEL, model, FM_IFACE);
 
     audio->start();
-    if (imidi->thr_start(SCHED_FIFO, audio->relpri() - 20, 0))
-    {
-        fprintf(stderr, "Warning: can't run midi thread in RT mode.\n");
-        imidi->thr_start(SCHED_OTHER, 0, 0);
-    }
+
     if (model->thr_start(SCHED_FIFO, audio->relpri() - 30, 0))
     {
         fprintf(stderr, "Warning: can't run model thread in RT mode.\n");
@@ -305,14 +256,13 @@ int main(int ac, char *av[])
     iface->thr_start(SCHED_OTHER, 0, 0);
 
     signal(SIGINT, sigint_handler);
-    n = 4;
+    n = 3;
     while (n)
     {
         itcc.get_event(1 << EV_EXIT);
         {
-            if (n-- == 4)
+            if (n-- == 3)
             {
-                imidi->terminate();
                 model->terminate();
                 slave->terminate();
                 if (osc)
@@ -323,7 +273,6 @@ int main(int ac, char *av[])
     }
 
     delete audio;
-    delete imidi;
     delete model;
     delete slave;
     delete osc;

@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -22,9 +23,6 @@
 
 #include <stdlib.h>
 #include <clthreads.h>
-#ifdef __linux__
-#include <zita-alsa-pcmi.h>
-#endif
 #include <jack/jack.h>
 #include "asection.h"
 #include "division.h"
@@ -37,9 +35,6 @@ class Audio : public A_thread
 public:
     Audio(const char *jname, Lfq_u32 *qnote, Lfq_u32 *qcomm);
     virtual ~Audio(void);
-#ifdef __linux__
-    void init_alsa(const char *device, int fsamp, int fsize, int nfrag);
-#endif
     void init_jack(const char *server, bool bform, Lfq_u8 *qmidi);
     void start(void);
 
@@ -59,56 +54,64 @@ private:
     };
 
     void init_audio(void);
-#ifdef __linux__
-    void close_alsa(void);
-#endif
     void close_jack(void);
     virtual void thr_main(void);
     void jack_shutdown(void);
     int jack_callback(jack_nframes_t);
-    void proc_jmidi(int);
+    bool proc_jmidi(int);
     void proc_queue(Lfq_u32 *);
     void proc_synth(int);
-    void proc_keys1(void);
-    void proc_keys2(void);
+    void proc_keys(void);
+    void proc_stops(void);
     void proc_mesg(void);
 
-    void key_off(int i, int b)
+    /* _keymap is 16-bit flag for each keyboard key:
+            bit 0..13 asserted if key pressed on corresponding manual
+            bit 14 asserted if hold pedal pressed
+            bit 15 asserted if state has changed
+    */
+    void key_on(uint8_t chan, uint8_t key)
     {
-        _keymap[i] &= ~b;
-        _keymap[i] |= KMAP_SET;
-    }
-
-    void key_on(int i, int b)
-    {
-        _keymap[i] |= b | KMAP_SET;
-    }
-
-    void cond_key_off(int m, int b)
-    {
-        int i;
-        uint16_t *p;
-
-        for (i = 0, p = _keymap; i < NNOTES; i++, p++)
+        printf("keyon(%d, %d) midimap[%d]=0x%04x\n",chan, key, chan, _midimap[chan]);
+        if (_midimap[chan] & 0x1000)
         {
-            if (*p & m)
-            {
-                *p &= ~b;
-                *p |= KMAP_SET;
-            }
+            uint16_t m = 1 << (_midimap[chan] & 15);
+            _keymap[key] |= m | KMAP_SET;
+            if (_hold)
+                _keymap[key] |= (m << 7);
         }
     }
 
-    void cond_key_on(int m, int b)
+    void key_off(uint8_t chan, uint8_t key)
     {
-        int i;
-        uint16_t *p;
-
-        for (i = 0, p = _keymap; i < NNOTES; i++, p++)
+        if (_midimap[chan] & 0x1000)
         {
-            if (*p & m)
-            {
-                *p |= b | KMAP_SET;
+            uint16_t m = ~(1 << (_midimap[chan] & 15));
+            _keymap[key] &= m;
+            _keymap[key] |= KMAP_SET;
+        }
+    }
+
+    void hold_on()
+    {
+        _hold = true;
+        uint16_t i, *p;
+        for (i = 0, p = _keymap; i < NNOTES; ++i, ++p)
+        {
+            if (*p & 0x7F)
+                *p |= ((*p & 0x7F) << 7) | KMAP_SET; // Set hold and changed flags
+        }
+    }
+
+    void hold_off()
+    {
+        _hold = false;
+        uint16_t i, *p;
+        for (i = 0, p = _keymap; i < NNOTES; ++i, ++p)
+        {
+            if (*p & 0x3f80) {
+                *p = (*p & 0x7F); // Clear hold flags
+                *p |= KMAP_SET; // Set changed flag
             }
         }
     }
@@ -122,9 +125,6 @@ private:
     Lfq_u32 *_qcomm;
     Lfq_u8 *_qmidi;
     volatile bool _running;
-#ifdef __linux__
-    Alsa_pcmi *_alsa_handle;
-#endif
     jack_client_t *_jack_handle;
     jack_port_t *_jack_opport[8];
     jack_port_t *_jack_midipt;
@@ -134,7 +134,7 @@ private:
     int _jmidi_count;
     int _jmidi_index;
     void *_jmidi_pdata;
-    int _hold;
+    bool _hold = false;
     bool _bform;
     int _nplay;
     unsigned int _fsamp;

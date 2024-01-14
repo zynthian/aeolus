@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -118,55 +119,45 @@ void Division::set_rank(int ind, Rankwave *W, int pan, int del)
 
 // Handle key up down events.
 //
-void Division::update(int note, int16_t mask)
+void Division::update_keys(uint8_t key, uint8_t flags)
 {
-    int r;
-    Rankwave *W;
-
-    for (r = 0; r < _nrank; r++)
+    for (int rank = 0; rank < _nrank; ++rank)
     {
-        W = _ranks[r];
-        if (W->_nmask & KMAP_ALL)
+        Rankwave* W = _ranks[rank];
+        if (W->_nmask & 0x7F)
         {
-            if (mask & W->_nmask)
-                W->note_on(note + 36);
-            else
-                W->note_off(note + 36);
+            if (W->_nmask & flags) {
+                W->note_on(key + 36);
+            } else {
+                W->note_off(key + 36);
+            }
         }
     }
 }
 
-void Division::update(uint16_t *keys)
+void Division::update_stops(uint16_t *keys)
 {
-    int d, r, m, n, n0, n1;
-    uint16_t *k;
-    Rankwave *W;
-
-    for (r = 0; r < _nrank; r++)
+    
+    for (int rank = 0; rank < _nrank; ++rank)
     {
-        W = _ranks[r];
+        Rankwave* W = _ranks[rank];
         if (W->_nmask & KMAP_SET)
         {
-            W->_nmask ^= KMAP_SET;
-            m = W->_nmask & KMAP_ALL;
-            if (m)
-            {
-                n0 = W->n0();
-                n1 = W->n1();
-                k = keys;
-                d = n0 - 36;
-                if (d > 0)
-                    k += d;
-                for (n = n0; n <= n1; n++)
+            // Stops changed
+            W->_nmask &= 0x7FFF; // Clear changed flag
+            uint8_t mask = W->_nmask & 0x7F;
+            if (mask) {
+                for (uint8_t key = 0; key < 61; ++key)
                 {
-                    if (*k++ & m)
-                        W->note_on(n);
+                    uint8_t flags = keys[key] | (keys[key] >> 6);
+                    if (W->_nmask & flags)
+                        W->note_on(key + 36);
                     else
-                        W->note_off(n);
+                        W->note_off(key + 36);
                 }
-            }
-            else
+            } else {
                 W->all_off();
+            }
         }
     }
 }
@@ -186,6 +177,7 @@ void Division::set_div_mask(int bit)
         if (W->_nmask & d)
         {
             W->_nmask |= b;
+            W->_nmask |= 128;
             W->_nmask |= KMAP_SET;
         }
     }
@@ -206,6 +198,7 @@ void Division::clr_div_mask(int bit)
         if (W->_nmask & d)
         {
             W->_nmask &= ~b;
+            W->_nmask |= 128;
             W->_nmask |= KMAP_SET;
         }
     }
@@ -215,8 +208,10 @@ void Division::set_rank_mask(int ind, int bit)
 {
     uint16_t b = 1 << bit;
     Rankwave *W = _ranks[ind];
-    if (bit == NKEYBD)
+    if (bit == NKEYBD) {
         b |= _dmask;
+        W->_nmask |= 128;
+    }
     W->_nmask |= b;
     W->_nmask |= KMAP_SET;
 }
@@ -225,8 +220,14 @@ void Division::clr_rank_mask(int ind, int bit)
 {
     uint16_t b = 1 << bit;
     Rankwave *W = _ranks[ind];
-    if (bit == NKEYBD)
+    if (bit == NKEYBD) {
         b |= _dmask;
+        W->_nmask &= ~128;
+    }
     W->_nmask &= ~b;
     W->_nmask |= KMAP_SET;
+    if (W->_nmask | (1 << NKEYBD))
+        W->_nmask |= 128;
+    else
+        W->_nmask &= ~128;
 }

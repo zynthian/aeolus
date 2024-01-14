@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -233,7 +234,7 @@ void Tiface::print_info(void)
     printf("Application id:  %s\n", _initdata->_appid);
     printf("Stops directory: %s\n", _initdata->_stopsdir);
     printf("Instrument:      %s\n", _initdata->_instrdir);
-    printf("ALSA Midi port:  %d:%d\n", _initdata->_client, _initdata->_ipport);
+    //printf("ALSA Midi port:  %d:%d\n", _initdata->_client, _initdata->_ipport);
     print_keybdd();
     print_divisd();
     print_midimap();

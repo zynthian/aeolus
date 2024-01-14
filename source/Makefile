@@ -30,14 +30,14 @@ CXXFLAGS += -march=native
 
 
 all:	aeolus aeolus_x11.so aeolus_txt.so
+
 debug: CXXFLAGS += -g
 debug: all
 
-
-AEOLUS_O =	main.o audio.o model.o slave.o imidi.o addsynth.o scales.o \
+AEOLUS_O =	main.o audio.o model.o slave.o addsynth.o scales.o \
 		reverb.o asection.o division.o rankwave.o rngen.o exp2ap.o lfqueue.o \
 		tinyosc.o osc.o
-aeolus:	LDLIBS += -lzita-alsa-pcmi -lclthreads -ljack -lasound -lpthread -ldl -lrt
+aeolus:	LDLIBS += -lclthreads -ljack -lasound -lpthread -ldl -lrt
 aeolus: LDFLAGS += -L$(LIBDIR)
 aeolus:	$(AEOLUS_O)
 	$(CXX) $(LDFLAGS) -o $@ $(AEOLUS_O) $(LDLIBS)

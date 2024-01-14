@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -82,8 +83,8 @@ Model::Model(Lfq_u32 *qcomm,
                            _pres(0),
                            _sc_cmode(0),
                            _sc_group(0),
-                           _audio(0),
-                           _midi(0)
+                           _audio(0)
+                           //_midi(0)
 {
     sprintf(_instrdir, "%s/%s", stopsdir, instrdir);
     sprintf(_wavesdir, "%s/%s", stopsdir, wavesdir);
@@ -95,8 +96,8 @@ Model::~Model(void)
 {
     if (_audio)
         _audio->recover();
-    if (_midi)
-        _midi->recover();
+    //if (_midi)
+    //    _midi->recover();
 }
 
 void Model::thr_main(void)
@@ -111,7 +112,6 @@ void Model::thr_main(void)
         switch (E)
         {
         case FM_AUDIO:
-        case FM_IMIDI:
         case FM_SLAVE:
         case FM_OSC:
         case FM_IFACE:
@@ -311,7 +311,6 @@ void Model::proc_mesg(ITC_mesg *M)
         // Save presets, midi presets, and wavetables.
         save();
         break;
-
     case MT_LOAD_RANK:
     case MT_CALC_RANK:
     {
@@ -324,31 +323,16 @@ void Model::proc_mesg(ITC_mesg *M)
         // Initialisation info from audio thread.
         _audio = (M_audio_info *)M;
         M = 0;
-        if (_midi)
-        {
-            init_audio();
-            init_iface();
-            init_ranks(MT_LOAD_RANK);
-        }
+        init_audio();
+        init_iface();
+        init_ranks(MT_LOAD_RANK);
         break;
-
-    case MT_MIDI_INFO:
-        // Initialisation info from midi thread.
-        _midi = (M_midi_info *)M;
-        M = 0;
-        if (_audio)
-        {
-            init_audio();
-            init_iface();
-            init_ranks(MT_LOAD_RANK);
-        }
-        break;
-
     case MT_AUDIO_SYNC:
         // Wavetable calculation done.
         send_event(TO_IFACE, new ITC_mesg(MT_IFC_READY));
         send_event(TO_OSC, new ITC_mesg(MT_IFC_READY));
         _ready = true;
+        printf("Ready\n");
         break;
 
     default:
@@ -360,7 +344,7 @@ void Model::proc_mesg(ITC_mesg *M)
 
 void Model::proc_qmidi(void)
 {
-    int c, d, p, t, v;
+    int c, m, d, p, t, v;
 
     // Handle commands from the qmidi queue. These are coming
     // from either the midi thread (ALSA), or the audio thread
@@ -376,6 +360,7 @@ void Model::proc_qmidi(void)
         _qmidi->read_commit(3);
         c = t & 0x0F;
         d = (_midimap[c] >> 4) & 15;
+        m = (_midimap[c]) & 15;
         switch (t & 0xF0)
         {
         case 0x90:
@@ -387,27 +372,59 @@ void Model::proc_qmidi(void)
             // Controllers.
             switch (p)
             {
+            case MIDICTL_MAVOL:
+                // Volume control
+                set_aupar(SRC_MIDI_PAR, -1, 0, MAVOL_MIN + v * (MAVOL_MAX - MAVOL_MIN) / 127.0f);
+                break;
+            case MIDICTL_RDELY:
+                // Reverb delay
+                set_aupar(SRC_MIDI_PAR, -1, 1, RDELY_MIN + v * (RDELY_MAX - RDELY_MIN) / 127.0f);
+                break;
+            case MIDICTL_RTIME:
+                // Reverb time
+                set_aupar(SRC_MIDI_PAR, -1, 2, RTIME_MIN + v * (RTIME_MAX - RTIME_MIN) / 127.0f);
+                break;
+            case MIDICTL_RPOSI:
+                // Reverb position
+                set_aupar(SRC_MIDI_PAR, -1, 3, RPOSI_MIN + v * (RPOSI_MAX - RPOSI_MIN) / 127.0f);
+                break;
             case MIDICTL_SWELL:
                 // Swell pedal
                 set_dipar(SRC_MIDI_PAR, d, 0, SWELL_MIN + v * (SWELL_MAX - SWELL_MIN) / 127.0f);
                 break;
-
             case MIDICTL_TFREQ:
                 // Tremulant frequency
                 set_dipar(SRC_MIDI_PAR, d, 1, TFREQ_MIN + v * (TFREQ_MAX - TFREQ_MIN) / 127.0f);
                 break;
-
             case MIDICTL_TMODD:
                 // Tremulant amplitude
                 set_dipar(SRC_MIDI_PAR, d, 2, TMODD_MIN + v * (TMODD_MAX - TMODD_MIN) / 127.0f);
                 break;
-
+            case MIDICTL_DAZIM:
+                // Division azimuth
+                set_aupar(SRC_MIDI_PAR, m, 0, DAZIM_MIN + v * (DAZIM_MAX - DAZIM_MIN) / 127.0f);
+                break;
+            case MIDICTL_DWIDT:
+                // Division width
+                set_aupar(SRC_MIDI_PAR, m, 1, DWIDT_MIN + v * (DWIDT_MAX - DWIDT_MIN) / 127.0f);
+                break;
+            case MIDICTL_DDIRE:
+                // Division direct
+                set_aupar(SRC_MIDI_PAR, m, 2, DDIRE_MIN + v * (DDIRE_MAX - DDIRE_MIN) / 127.0f);
+                break;
+            case MIDICTL_DREFL:
+                // Division reflect
+                set_aupar(SRC_MIDI_PAR, m, 3, DREFL_MIN + v * (DREFL_MAX - DREFL_MIN) / 127.0f);
+                break;
+            case MIDICTL_DREVB:
+                // Division reverb
+                set_aupar(SRC_MIDI_PAR, m, 4, DREVB_MIN + v * (DREVB_MAX - DREVB_MIN) / 127.0f);
+                break;
             case MIDICTL_BANK:
                 // Preset bank.
                 if (v < NBANK)
                     _bank = v;
                 break;
-
             case MIDICTL_IFELM:
                 // Stop control.
                 if (v & 64)
@@ -425,6 +442,7 @@ void Model::proc_qmidi(void)
                 }
                 break;
             }
+
             break;
 
         case 0xC0:
@@ -468,8 +486,8 @@ void Model::init_iface(void)
     M->_wavesdir = _wavesdir;
     M->_instrdir = _instrdir;
     M->_appid = _appname;
-    M->_client = _midi->_client;
-    M->_ipport = _midi->_ipport;
+    //M->_client = _midi->_client;
+    //M->_ipport = _midi->_ipport;
     M->_nasect = _nasect;
     M->_nkeybd = _nkeybd;
     M->_ndivis = _ndivis;
@@ -610,7 +628,7 @@ void Model::set_ifelm(int g, int i, int m)
         {
             _qcomm->write(0, s ? I->_action1 : I->_action0);
             _qcomm->write_commit(1);
-            send_event(TO_IFACE, new M_ifc_ifelm(MT_IFC_ELCLR + s, g, i));
+            send_event (TO_IFACE, new M_ifc_ifelm (MT_IFC_ELCLR + s, g, i));
         }
     }
 }

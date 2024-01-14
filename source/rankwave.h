@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -85,7 +86,7 @@ public:
     Rankwave(int n0, int n1);
     ~Rankwave(void);
 
-    void note_on(int n)
+    void note_on(uint8_t n)
     {
         if ((n < _n0) || (n > _n1))
             return;
@@ -99,7 +100,7 @@ public:
         }
     }
 
-    void note_off(int n)
+    void note_off(uint8_t n)
     {
         if ((n < _n0) || (n > _n1))
             return;
@@ -124,7 +125,7 @@ public:
     int load(const char *path, Addsynth *D, float fsamp, float fbase, float *scale);
     bool modif(void) const { return _modif; }
 
-    int _nmask; // used by division logic
+    uint16_t _nmask; // used by division logic
 
 private:
     Rankwave(const Rankwave &);

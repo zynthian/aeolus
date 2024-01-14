@@ -56,7 +56,6 @@ void Audiowin::handle_xmesg(XClientMessageEvent *E)
 void Audiowin::handle_callb(int k, X_window *W, XEvent *E)
 {
     int c;
-
     switch (k)
     {
     case SLIDER | X_slider::MOVE:

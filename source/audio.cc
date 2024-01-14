@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,9 +29,6 @@ Audio::Audio(const char *name, Lfq_u32 *qnote, Lfq_u32 *qcomm) : A_thread("Audio
                                                                  _qcomm(qcomm),
                                                                  _qmidi(0),
                                                                  _running(false),
-#ifdef __linux__
-                                                                 _alsa_handle(0),
-#endif
                                                                  _jack_handle(0),
                                                                  _abspri(0),
                                                                  _relpri(0),
@@ -47,10 +45,6 @@ Audio::~Audio(void)
 {
     int i;
 
-#ifdef __linux__
-    if (_alsa_handle)
-        close_alsa();
-#endif
     if (_jack_handle)
         close_jack();
     for (i = 0; i < _nasect; i++)
@@ -89,7 +83,6 @@ void Audio::init_audio(void)
         _asectp[i] = new Asection((float)_fsamp);
         _asectp[i]->set_size(_revsize);
     }
-    _hold = KMAP_ALL;
 }
 
 void Audio::start(void)
@@ -107,74 +100,16 @@ void Audio::start(void)
     send_event(TO_MODEL, M);
 }
 
-#ifdef __linux__
-void Audio::init_alsa(const char *device, int fsamp, int fsize, int nfrag)
-{
-    _alsa_handle = new Alsa_pcmi(device, 0, 0, fsamp, fsize, nfrag);
-    if (_alsa_handle->state() < 0)
-    {
-        fprintf(stderr, "Error: can't connect to ALSA.\n");
-        exit(1);
-    }
-    _nplay = _alsa_handle->nplay();
-    _fsize = fsize;
-    _fsamp = fsamp;
-    if (_nplay > 2)
-        _nplay = 2;
-    init_audio();
-    for (int i = 0; i < _nplay; i++)
-        _outbuf[i] = new float[fsize];
-    _running = true;
-    if (thr_start(_policy = SCHED_FIFO, _relpri = -20, 0))
-    {
-        fprintf(stderr, "Warning: can't run ALSA thread in RT mode.\n");
-        if (thr_start(_policy = SCHED_OTHER, _relpri = 0, 0))
-        {
-            fprintf(stderr, "Error: can't create ALSA thread.\n");
-            exit(1);
-        }
-    }
-}
-#endif
-
-#ifdef __linux__
-void Audio::close_alsa()
-{
-    _running = false;
-    get_event(1 << EV_EXIT);
-    for (int i = 0; i < _nplay; i++)
-        delete[] _outbuf[i];
-    delete _alsa_handle;
-}
-#endif
-
 void Audio::thr_main(void)
 {
 #ifdef __linux__
-    unsigned long k;
-
-    _alsa_handle->pcm_start();
 
     while (_running)
     {
-        k = _alsa_handle->pcm_wait();
         proc_queue(_qnote);
         proc_queue(_qcomm);
-        proc_keys1();
-        proc_keys2();
-        while (k >= _fsize)
-        {
-            proc_synth(_fsize);
-            _alsa_handle->play_init(_fsize);
-            for (int i = 0; i < _nplay; i++)
-                _alsa_handle->play_chan(i, _outbuf[i], _fsize);
-            _alsa_handle->play_done(_fsize);
-            k -= _fsize;
-        }
         proc_mesg();
     }
-
-    _alsa_handle->pcm_stop();
     put_event(EV_EXIT);
 #endif
 }
@@ -227,10 +162,10 @@ void Audio::init_jack(const char *server, bool bform, Lfq_u8 *qmidi)
 
     if (_qmidi)
     {
-        _jack_midipt = jack_port_register(_jack_handle, "Midi/in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+        _jack_midipt = jack_port_register(_jack_handle, "midi_in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
         if (!_jack_midipt)
         {
-            fprintf(stderr, "Error: can't create the 'Midi/in' jack port\n");
+            fprintf(stderr, "Error: can't create the 'midi_in' jack port\n");
             exit(1);
         }
     }
@@ -276,13 +211,10 @@ int Audio::jack_static_callback(jack_nframes_t nframes, void *arg)
 
 int Audio::jack_callback(jack_nframes_t nframes)
 {
-    int i;
-
     proc_queue(_qnote);
     proc_queue(_qcomm);
-    proc_keys1();
-    proc_keys2();
-    for (i = 0; i < _nplay; i++)
+    proc_stops(); //!@todo Should this only be called when stops change?
+    for (int i = 0; i < _nplay; i++)
         _outbuf[i] = (float *)(jack_port_get_buffer(_jack_opport[i], nframes));
     _jmidi_pdata = jack_port_get_buffer(_jack_midipt, nframes);
     _jmidi_count = jack_midi_get_event_count(_jmidi_pdata);
@@ -292,10 +224,11 @@ int Audio::jack_callback(jack_nframes_t nframes)
     return 0;
 }
 
-void Audio::proc_jmidi(int tmax)
+bool Audio::proc_jmidi(int tmax)
 {
-    int c, f, k, m, n, t, v;
+    uint8_t cmd, val1, val2, chan, ctrl_flags;
     jack_midi_event_t E;
+    bool keys_dirty = false;
 
     // Read and process MIDI commands from the JACK port.
     // Events related to keyboard state are dealt with
@@ -304,76 +237,92 @@ void Audio::proc_jmidi(int tmax)
 
     while ((jack_midi_event_get(&E, _jmidi_pdata, _jmidi_index) == 0) && (E.time < (jack_nframes_t)tmax))
     {
-        t = E.buffer[0];
-        n = E.buffer[1];
-        v = E.buffer[2];
-        c = t & 0x0F;
-        k = _midimap[c] & 15;
-        f = _midimap[c] >> 12;
-
-        switch (t & 0xF0)
+        cmd = E.buffer[0];
+        val1 = E.buffer[1];
+        val2 = E.buffer[2];
+        chan = cmd & 0x0F;
+        ctrl_flags = (_midimap[chan] >> 12) & 7; // Control enabled if (f & 4)
+        
+        switch (cmd & 0xF0)
         {
         case 0x80:
         case 0x90:
             // Note on or off.
-            if (v && (t & 0x10))
+            if (val2 && (cmd & 0x10))
             {
                 // Note on.
-                if (n < 36)
+                if (val1 < 36)
                 {
-                    if ((f & 4) && (n >= 24) && (n < 34))
+                    // Keys 0..33 may be used for program change
+                    if ((ctrl_flags & 4) && (val1 < 34))
                     {
                         // Preset selection, sent to model thread
                         // if on control-enabled channel.
                         if (_qmidi->write_avail() >= 3)
                         {
-                            _qmidi->write(0, t);
-                            _qmidi->write(1, n);
-                            _qmidi->write(2, v);
+                            _qmidi->write(0, cmd);
+                            _qmidi->write(1, val1);
+                            _qmidi->write(2, val2);
                             _qmidi->write_commit(3);
                         }
                     }
                 }
-                else if (n <= 96)
+                else if (val1 <= 96)
                 {
-                    if (f & 1)
-                        key_on(n - 36, 1 << k);
+                    // Keys 36..96 used as keyboard
+                    key_on(chan, val1 - 36);
+                    keys_dirty = true;
                 }
             }
             else
             {
                 // Note off.
-                if (n < 36)
+                if (val1 < 36)
                 {
+                    // Ignore note off for keys 0..35 (prog change)
                 }
-                else if (n <= 96)
+                else if (val1 <= 96)
                 {
-                    if (f & 1)
-                        key_off(n - 36, 1 << k);
+                    // Note off for keys 36..96
+                    key_off(chan, val1 - 36);
+                    keys_dirty = true;
                 }
             }
             break;
 
         case 0xB0: // Controller
-            switch (n)
+            switch (val1)
             {
+            case MIDICTL_HOLD:
+                // Hold pedal.
+                if (val2 > 63)
+                    hold_on();
+                else
+                    hold_off();
+                keys_dirty = true;
+                break;
             case MIDICTL_ASOFF:
                 // All sound off, accepted on control channels only.
                 // Clears all keyboards.
-                if (f & 4)
+                if (ctrl_flags & 4)
                 {
-                    m = KMAP_ALL;
-                    cond_key_off(m, m);
+                    hold_off();
+                    keys_dirty = true;
                 }
-                break;
+                else
+                {
+                    break;
+                }
+                // Fall through to all notes off
 
             case MIDICTL_ANOFF:
                 // All notes off, accepted on channels controlling
-                // a keyboard.
-                if (f & 1)
+                // a keyboard. Does not clear held notes.
+                if (ctrl_flags & 4)
                 {
-                    m = 1 << k;
-                    cond_key_off(m, m);
+                    for (int i = 0; i < NNOTES; ++i)
+                        key_off(chan, i);
+                    keys_dirty = true;
                 }
                 break;
 
@@ -381,28 +330,49 @@ void Audio::proc_jmidi(int tmax)
             case MIDICTL_IFELM:
                 // Program bank selection or stop control, sent
                 // to model thread if on control-enabled channel.
-                if (f & 4)
+                if (ctrl_flags & 4)
                 {
                     if (_qmidi->write_avail() >= 3)
                     {
-                        _qmidi->write(0, t);
-                        _qmidi->write(1, n);
-                        _qmidi->write(2, v);
+                        _qmidi->write(0, cmd);
+                        _qmidi->write(1, val1);
+                        _qmidi->write(2, val2);
                         _qmidi->write_commit(3);
                     }
                 }
             case MIDICTL_SWELL:
             case MIDICTL_TFREQ:
             case MIDICTL_TMODD:
-                // Per-division performance controls, sent to model
-                // thread if on a channel that controls a division.
-                if (f & 2)
+                // Swell division commands
+                if (ctrl_flags & 2)
                 {
                     if (_qmidi->write_avail() >= 3)
                     {
-                        _qmidi->write(0, t);
-                        _qmidi->write(1, n);
-                        _qmidi->write(2, v);
+                        _qmidi->write(0, 0xB0 | chan);
+                        _qmidi->write(1, val1);
+                        _qmidi->write(2, val2);
+                        _qmidi->write_commit(3);
+                    }
+                }
+                break;
+
+            case MIDICTL_MAVOL:
+            case MIDICTL_RDELY:
+            case MIDICTL_RTIME:
+            case MIDICTL_RPOSI:
+            case MIDICTL_DAZIM:
+            case MIDICTL_DWIDT:
+            case MIDICTL_DDIRE:
+            case MIDICTL_DREFL:
+            case MIDICTL_DREVB:
+                // Division commands
+                if (ctrl_flags & 4)
+                {
+                    if (_qmidi->write_avail() >= 3)
+                    {
+                        _qmidi->write(0, 0xB0 | chan);
+                        _qmidi->write(1, val1);
+                        _qmidi->write(2, val2);
                         _qmidi->write_commit(3);
                     }
                 }
@@ -413,12 +383,12 @@ void Audio::proc_jmidi(int tmax)
         case 0xC0:
             // Program change sent to model thread
             // if on control-enabled channel.
-            if (f & 4)
+            if (ctrl_flags & 4)
             {
                 if (_qmidi->write_avail() >= 3)
                 {
-                    _qmidi->write(0, t);
-                    _qmidi->write(1, n);
+                    _qmidi->write(0, cmd);
+                    _qmidi->write(1, val1);
                     _qmidi->write(2, 0);
                     _qmidi->write_commit(3);
                 }
@@ -427,13 +397,13 @@ void Audio::proc_jmidi(int tmax)
         }
         _jmidi_index++;
     }
+    return keys_dirty;
 }
 
 void Audio::proc_queue(Lfq_u32 *Q)
 {
-    int c, i, j, k, n;
-    uint32_t q;
-    uint16_t m;
+    uint32_t event;
+    int cmd, val1, val2, val3;
     union
     {
         uint32_t i;
@@ -443,86 +413,75 @@ void Audio::proc_queue(Lfq_u32 *Q)
     // Execute commands from the model thread (qcomm),
     // or from the midi thread (qnote).
 
-    n = Q->read_avail();
+    int n = Q->read_avail();
     while (n > 0)
     {
-        q = Q->read(0);
-        c = (q >> 24) & 255; // command
-        i = (q >> 16) & 255; // key, rank or parameter index
-        j = (q >> 8) & 255;  // division index
-        k = q & 255;         // keyboard index
+        event = Q->read(0); // event
+        cmd = event >> 24;  // event command
+        val1 = (event >> 16) & 255;
+        val2 = (event >> 8) & 255;
+        val3 = event & 255;
 
-        switch (c)
+        switch (cmd)
         {
         case 0:
             // Single key off.
-            key_off(i, 1 << k);
+            key_off(val2, val3);
             Q->read_commit(1);
             break;
 
         case 1:
             // Single key on.
-            key_on(i, 1 << k);
-            Q->read_commit(1);
-            break;
-
-        case 2:
-            // All notes off.
-            m = (k == NKEYBD) ? KMAP_ALL : (1 << k);
-            cond_key_off(m, m);
-            Q->read_commit(1);
-            break;
-
-        case 3:
+            key_on(val2, val3);
             Q->read_commit(1);
             break;
 
         case 4:
-            // Clear bit in division mask.
-            _divisp[j]->clr_div_mask(k);
+            // Clear bits in division mask.
+            _divisp[val2]->clr_div_mask(val3);
             Q->read_commit(1);
+            proc_stops();
             break;
 
         case 5:
             // Set bit in division mask.
-            _divisp[j]->set_div_mask(k);
+            _divisp[val2]->set_div_mask(val3);
             Q->read_commit(1);
+            proc_stops();
             break;
 
         case 6:
             // Clear bit in rank mask.
-            _divisp[j]->clr_rank_mask(i, k);
+            _divisp[val2]->clr_rank_mask(val1, val3);
             Q->read_commit(1);
+            proc_stops();
             break;
 
         case 7:
             // Set bit in rank mask.
-            _divisp[j]->set_rank_mask(i, k);
+            _divisp[val2]->set_rank_mask(val1, val3);
             Q->read_commit(1);
+            proc_stops();
             break;
 
         case 8:
             // Hold off.
-            printf("HOLD OFF %d", k);
-            //            _hold = KMAP_ALL;
-            //             cond_key_off (KMAP_HLD, KMAP_HLD);
+            hold_off();
             Q->read_commit(1);
             break;
 
         case 9:
             // Hold on.
-            printf("HOLD ON  %d", k);
-            //            _hold = KMAP_ALL | KMAP_HLD;
-            //            cond_key_on (, KMAP_HLD);
+            hold_on();
             Q->read_commit(1);
             break;
 
         case 16:
             // Tremulant on/off.
-            if (k)
-                _divisp[j]->trem_on();
+            if (val3)
+                _divisp[val2]->trem_on();
             else
-                _divisp[j]->trem_off();
+                _divisp[val2]->trem_off();
             Q->read_commit(1);
             break;
 
@@ -532,16 +491,16 @@ void Audio::proc_queue(Lfq_u32 *Q)
                 return;
             u.i = Q->read(1);
             Q->read_commit(2);
-            switch (i)
+            switch (val1)
             {
             case 0:
-                _divisp[j]->set_swell(u.f);
+                _divisp[val2]->set_swell(u.f);
                 break;
             case 1:
-                _divisp[j]->set_tfreq(u.f);
+                _divisp[val2]->set_tfreq(u.f);
                 break;
             case 2:
-                _divisp[j]->set_tmodd(u.f);
+                _divisp[val2]->set_tmodd(u.f);
                 break;
             }
             break;
@@ -553,33 +512,31 @@ void Audio::proc_queue(Lfq_u32 *Q)
     }
 }
 
-void Audio::proc_keys1(void)
+void Audio::proc_keys(void)
 {
-    int d, n;
-    uint16_t m;
-
-    for (n = 0; n < NNOTES; n++)
+    for (int key = 0; key < NNOTES; ++key)
     {
-        m = _keymap[n];
-        if (m & KMAP_SET)
+        uint16_t flags = _keymap[key];
+        if (flags & KMAP_SET)
         {
-            m ^= KMAP_SET;
-            _keymap[n] = m;
-            for (d = 0; d < _ndivis; d++)
-            {
-                _divisp[d]->update(n, m & KMAP_ALL);
-            }
+            printf("Key %d has changed\n", key);
+            //Key state has changed
+            flags &= 0x7FFF; // clear changed flag
+            _keymap[key] = flags;
+            flags |= (flags >> 7);
+            for (int div = 0; div < _ndivis; ++div)
+                _divisp[div]->update_keys(key, flags & 0x7f);
         }
     }
 }
 
-void Audio::proc_keys2(void)
+void Audio::proc_stops(void)
 {
     int d;
 
     for (d = 0; d < _ndivis; d++)
     {
-        _divisp[d]->update(_keymap);
+        _divisp[d]->update_stops(_keymap);
     }
 }
 
@@ -613,10 +570,8 @@ void Audio::proc_synth(int nframes)
     for (k = 0; k < nframes; k += PERIOD)
     {
         if (_jmidi_pdata)
-        {
-            proc_jmidi(k + PERIOD);
-            proc_keys1();
-        }
+            if (proc_jmidi(k + PERIOD))
+                proc_keys();
 
         memset(W, 0, PERIOD * sizeof(float));
         memset(X, 0, PERIOD * sizeof(float));

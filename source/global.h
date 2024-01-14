@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -88,13 +89,54 @@ enum // GLOBAL LIMITS
 #define TMODD_MAX 0.6f
 #define TMODD_DEF 0.3f
 
+#define MIDICTL_DAZIM 14 // Division Azimuth
+#define DAZIM_MIN -0.5f
+#define DAZIM_MAX 0.5f
+
+#define MIDICTL_DWIDT 15 // Division Width
+#define DWIDT_MIN 0.0f
+#define DWIDT_MAX 1.0f
+
+#define MIDICTL_DDIRE 16 // Division Direct
+#define DDIRE_MIN 0.0f
+#define DDIRE_MAX 1.0f
+
+#define MIDICTL_DREFL 17 // Division Reflect
+#define DREFL_MIN 0.0f
+#define DREFL_MAX 1.0f
+
+#define MIDICTL_DREVB 18 // Division Reverb
+#define DREVB_MIN 0.0f
+#define DREVB_MAX 1.0f
+
+#define MIDICTL_RDELY 20 // Reverb delay
+#define RDELY_MIN 0.025f
+#define RDELY_MAX 0.150f
+
+#define MIDICTL_RTIME 21 // Reverb time
+#define RTIME_MIN 2.0f
+#define RTIME_MAX 7.0f
+
+#define MIDICTL_RPOSI 22 // Reverb position
+#define RPOSI_MIN -1.0f
+#define RPOSI_MAX 1.0f
+
+#define MIDICTL_MAVOL 23 // Master volume
+#define MAVOL_MIN 0.0f
+#define MAVOL_MAX 1.0f
+
 #define MIDICTL_BANK 32
 #define MIDICTL_HOLD 64
 #define MIDICTL_IFELM 98
 #define MIDICTL_ASOFF 120
 #define MIDICTL_ANOFF 123
 
-#define KMAP_ALL 0x0FFF
+#define KEYS_MASK 63
+#define HOLD_MASK 64
+#define ALL_MASK 127
+
+#define KEY_CHANGE 128
+
 #define KMAP_SET 0x8000 // Set if mask or keymap entry is modified.
 
 class Fparm

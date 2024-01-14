@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2022 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -411,7 +412,7 @@ void Mainwin::setup(M_ifc_init *M)
         H.state(IconicState);
     x_apply(&H);
 
-    sprintf(s, "%s   Aeolus-%s  [%d:%d]", M->_appid, VERSION, M->_client, M->_ipport);
+    sprintf(s, "%s   Aeolus-%s", M->_appid, VERSION);
     x_set_title(s);
     x_resize(_xsize, _ysize);
     _splash = new Splashwin(this, (_xsize - Splashwin::XSIZE) / 2, (_ysize - Splashwin::YSIZE) / 2);
