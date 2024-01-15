@@ -102,8 +102,6 @@ void Audio::start(void)
 
 void Audio::thr_main(void)
 {
-#ifdef __linux__
-
     while (_running)
     {
         proc_queue(_qnote);
@@ -111,7 +109,6 @@ void Audio::thr_main(void)
         proc_mesg();
     }
     put_event(EV_EXIT);
-#endif
 }
 
 void Audio::init_jack(const char *server, bool bform, Lfq_u8 *qmidi)

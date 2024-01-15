@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban  <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -110,7 +111,7 @@ void Midiwin::setup(M_ifc_init *M)
     x_apply(&H);
     x_resize(_xs, _ys);
 
-    sprintf(s, "%s   Aeolus-%s   Midi settings", M->_appid, VERSION);
+    sprintf(s, "Aeolus-%s   Midi settings", VERSION);
     x_set_title(s);
 }
 

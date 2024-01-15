@@ -412,7 +412,7 @@ void Mainwin::setup(M_ifc_init *M)
         H.state(IconicState);
     x_apply(&H);
 
-    sprintf(s, "%s   Aeolus-%s", M->_appid, VERSION);
+    sprintf(s, "Aeolus-%s", VERSION);
     x_set_title(s);
     x_resize(_xsize, _ysize);
     _splash = new Splashwin(this, (_xsize - Splashwin::XSIZE) / 2, (_ysize - Splashwin::YSIZE) / 2);

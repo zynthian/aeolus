@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban  <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -174,7 +175,7 @@ void Instrwin::setup(M_ifc_init *M)
     y += 5;
     if (y < YSIZE)
         y = YSIZE;
-    sprintf(s, "%s   Aeolus-%s   Instrument settings", M->_appid, VERSION);
+    sprintf(s, "Aeolus-%s   Instrument settings", VERSION);
     x_set_title(s);
 
     _ntempe = M->_ntempe;

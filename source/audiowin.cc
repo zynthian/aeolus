@@ -1,6 +1,7 @@
 // ----------------------------------------------------------------------------
 //
 //  Copyright (C) 2003-2013 Fons Adriaensen <fons@linuxaudio.org>
+//                2022-2024 riban  <riban@zynthian.org>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -130,7 +131,7 @@ void Audiowin::setup(M_ifc_init *M)
     add_text(355, 305, 80, 20, "Position", &text0);
     add_text(570, 305, 60, 20, "Volume", &text0);
 
-    sprintf(s, "%s   Aeolus-%s   Audio settings", M->_appid, VERSION);
+    sprintf(s, "Aeolus-%s   Audio settings", VERSION);
     x_set_title(s);
 
     H.position(_xp, _yp);
