@@ -210,6 +210,14 @@ void Osc::proc_mesg(ITC_mesg *M)
             {
                 M_ifc_ifelm *X = (M_ifc_ifelm *)M;
                 printf("OSC received %d for group %d element %d\n", M->type(), X->_group, X->_ifelm);
+                if (notify)
+                {
+                    char buffer[1024], str[1024];
+                    sprintf(str, "%s/stop", notify_path);
+                    int len = tosc_writeMessage(buffer, sizeof(buffer), str, "");
+                    //!@todo Add parameters!!!
+                    sendto(osc_fd, buffer, len, MSG_CONFIRM | MSG_DONTWAIT, (const struct sockaddr *)&notify_sockaddr, sizeof(notify_sockaddr));
+                }
             }
         }
 
