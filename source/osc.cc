@@ -164,6 +164,25 @@ void Osc::process_osc(tosc_message *osc_msg)
             midi_config[i] = tosc_getNextInt32(osc_msg);
         send_event(TO_MODEL, new M_ifc_chconf(MT_IFC_MCSET, preset, midi_config));
     }
+    else if (strcmp(tosc_getAddress(osc_msg), "/stop") == 0 && strcmp(tosc_getFormat(osc_msg), "iii") == 0)
+    {
+        int div = tosc_getNextInt32(osc_msg);
+        int stop = tosc_getNextInt32(osc_msg);
+        int val = tosc_getNextInt32(osc_msg);
+        if (val)
+            send_event(TO_MODEL, new M_ifc_ifelm(MT_IFC_ELSET, div, stop));
+        else
+            send_event(TO_MODEL, new M_ifc_ifelm(MT_IFC_ELCLR, div, stop));
+
+    }
+    else if (strcmp(tosc_getAddress(osc_msg), "/audio_param") == 0 && strcmp(tosc_getFormat(osc_msg), "iif") == 0)
+    {
+        int asect = tosc_getNextInt32(osc_msg);
+        int parid = tosc_getNextInt32(osc_msg);
+        float val = tosc_getNextFloat(osc_msg);
+        send_event(TO_MODEL, new M_ifc_aupar(FM_OSC, asect, parid, val));
+
+    }
     // else
     //     tosc_printMessage(osc_msg);
 }
@@ -186,5 +205,12 @@ void Osc::proc_mesg(ITC_mesg *M)
                 sendto(osc_fd, buffer, len, MSG_CONFIRM | MSG_DONTWAIT, (const struct sockaddr *)&notify_sockaddr, sizeof(notify_sockaddr));
             }
             break;
+        case MT_IFC_ELSET:
+        case MT_IFC_ELCLR:
+            {
+                M_ifc_ifelm *X = (M_ifc_ifelm *)M;
+                printf("OSC received %d for group %d element %d\n", M->type(), X->_group, X->_ifelm);
+            }
         }
+
 }
