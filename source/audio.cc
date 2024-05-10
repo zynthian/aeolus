@@ -516,7 +516,7 @@ void Audio::proc_keys(void)
         uint16_t flags = _keymap[key];
         if (flags & KMAP_SET)
         {
-            printf("Key %d has changed\n", key);
+            //printf("Key %d has changed\n", key);
             //Key state has changed
             flags &= 0x7FFF; // clear changed flag
             _keymap[key] = flags;

@@ -49,17 +49,16 @@ Osc::Osc(int port, const char *notify_uri) : A_thread("OSC"),
                 break;
             }
         }
-        printf("nofify_addr: %s port_str: %s notify_path: %s\n", notify_addr, port_str, notify_path);
+
         int port_number = 0;
-        if (port_str)
-            port_number = atoi(port_str);
+        if (port_str) port_number = atoi(port_str);
+        else port_number = udp_port + 1;
+        
+        printf("nofify_addr: %d port_str: %s notify_path: %s\n", notify_addr, port_number, notify_path);
 
         memset(notify_sockaddr.sin_zero, '\0', sizeof notify_sockaddr.sin_zero);
         notify_sockaddr.sin_family = AF_INET;
-        if (port_number)
-            notify_sockaddr.sin_port = htons(port_number);
-        else
-            notify_sockaddr.sin_port = htons(udp_port + 1);
+        notify_sockaddr.sin_port = htons(port_number);
         notify_sockaddr.sin_addr.s_addr = 0;
         notify = (inet_pton(AF_INET, notify_addr, &notify_sockaddr.sin_addr) == 1);
         if (!notify)
@@ -209,7 +208,7 @@ void Osc::proc_mesg(ITC_mesg *M)
         case MT_IFC_ELCLR:
             {
                 M_ifc_ifelm *X = (M_ifc_ifelm *)M;
-                printf("OSC received %d for group %d element %d\n", M->type(), X->_group, X->_ifelm);
+                printf("OSC received %ld for group %d element %d\n", M->type(), X->_group, X->_ifelm);
                 if (notify)
                 {
                     char buffer[1024], str[1024];
