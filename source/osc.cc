@@ -54,7 +54,7 @@ Osc::Osc(int port, const char *notify_uri) : A_thread("OSC"),
         if (port_str) port_number = atoi(port_str);
         else port_number = udp_port + 1;
         
-        printf("nofify_addr: %d port_str: %s notify_path: %s\n", notify_addr, port_number, notify_path);
+        printf("nofify_addr: %s port_str: %d notify_path: %s\n", notify_addr, port_number, notify_path);
 
         memset(notify_sockaddr.sin_zero, '\0', sizeof notify_sockaddr.sin_zero);
         notify_sockaddr.sin_family = AF_INET;
