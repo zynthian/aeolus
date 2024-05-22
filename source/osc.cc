@@ -83,7 +83,7 @@ Osc::Osc(int port, const char *notify_uri) : A_thread("OSC"),
 
 void Osc::thr_main()
 {
-    char buffer[2048];
+	// Create sockets for UDP communication
     osc_fd = socket(AF_INET, SOCK_DGRAM, 0);
     fcntl(osc_fd, F_SETFL, O_NONBLOCK);
     struct sockaddr_in sin;
@@ -92,43 +92,39 @@ void Osc::thr_main()
     sin.sin_addr.s_addr = INADDR_ANY;
     bind(osc_fd, (struct sockaddr *)&sin, sizeof(struct sockaddr_in));
     printf("Listening for OSC on port %d\n", udp_port);
-    struct timeval timeout;
-    timeout.tv_sec = 0;
 
-    while (1)
-    {
+    struct timeval timeout;
+	fd_set readSet;
+
+	char buffer[2048];
+	tosc_bundle bundle;
+	tosc_message osc;
+
+    while (1) {
         int E = get_event_timed();
-        switch (E)
-        {
-        case FM_MODEL:
-            proc_mesg(get_message());
-            break;
+        switch (E) {
+        	case FM_MODEL:
+           		proc_mesg(get_message());
+           		break;
         }
 
-        fd_set readSet;
         FD_ZERO(&readSet);
         FD_SET(osc_fd, &readSet);
+        timeout.tv_sec = 0;
         timeout.tv_usec = 10000;
-        if (select(osc_fd + 1, &readSet, NULL, NULL, &timeout) > 0)
-        {
-            struct sockaddr sa;
-            socklen_t sa_len = sizeof(struct sockaddr_in);
-            int len = 0;
-            while ((len = (int)recvfrom(osc_fd, buffer, sizeof(buffer), 0, &sa, &sa_len)) > 0)
-            {
-                if (tosc_isBundle(buffer))
-                {
-                    tosc_bundle bundle;
+        if (select(osc_fd + 1, &readSet, NULL, NULL, &timeout) > 0) {
+        	int len = 0;
+			//struct sockaddr_in sa_in;
+			//socklen_t sa_len = sizeof(struct sockaddr_in);
+            //while ((len = (int)recvfrom(osc_fd, buffer, sizeof(buffer), 0, (sockaddr *) &sa_in, &sa_len)) > 0) {
+            while ((len = (int)recvfrom(osc_fd, buffer, sizeof(buffer), 0, NULL, NULL)) > 0) {
+                if (tosc_isBundle(buffer)) {
                     tosc_parseBundle(&bundle, buffer, len);
-                    tosc_message osc;
-                    while (tosc_getNextMessage(&bundle, &osc))
-                    {
+                    while (tosc_getNextMessage(&bundle, &osc)) {
                         process_osc(&osc);
                     }
                 }
-                else
-                {
-                    tosc_message osc;
+                else {
                     tosc_parseMessage(&osc, buffer, len);
                     process_osc(&osc);
                 }
