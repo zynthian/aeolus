@@ -72,7 +72,7 @@ private:
     */
     void key_on(uint8_t chan, uint8_t key)
     {
-        printf("keyon(%d, %d) midimap[%d]=0x%04x\n",chan, key, chan, _midimap[chan]);
+        //printf("keyon(%d, %d) midimap[%d]=0x%04x\n",chan, key, chan, _midimap[chan]);
         if (_midimap[chan] & 0x1000)
         {
             uint16_t m = 1 << (_midimap[chan] & 15);
